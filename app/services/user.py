@@ -1,0 +1,32 @@
+from fastapi import status
+from app.schema.user import UserOut
+from app import models
+from sqlalchemy.orm import Session
+from fastapi.params import Depends
+from ..database import get_db
+ 
+def get_user(user_id : int , db : Session):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        return UserOut(
+            message="User {user_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    return UserOut(**user.__dict__,
+        message="User  retrieved successfully",
+        status_code=status.HTTP_200_OK
+    )
+
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        return UserOut(
+                message="User not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+    db.delete(user)
+    db.commit()
+    return UserOut(
+            message="User deleted successfully",
+            status_code=status.HTTP_200_OK,
+        )
