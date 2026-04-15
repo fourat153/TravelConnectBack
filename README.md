@@ -21,6 +21,7 @@ A social travel platform that connects travelers, enabling them to share trips, 
 TravelConnectBack/
 ├── app/
 │   ├── models/         # SQLAlchemy models (one file per table)
+|   |── services        
 │   ├── schema/         # Pydantic schemas
 │   ├── router/         # FastAPI routers
 │   ├── utils/          # Helpers (error handling, email, etc.)
@@ -87,17 +88,6 @@ uvicorn main:app --reload
 API will be available at `http://localhost:8000`
 
 Interactive docs at `http://localhost:8000/docs`
-
----
-
-## Features
-
-- User registration and authentication (JWT)
-- Email confirmation
-- User profile management
-- Privacy settings
-- Error logging to database
-- City and destination management
 
 ---
 
