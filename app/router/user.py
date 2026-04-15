@@ -1,0 +1,85 @@
+import uuid
+from fastapi import APIRouter , status
+from fastapi.params import Depends
+from app import enums
+from sqlmodel import Session
+from app.schema.confirmation_code import ConfirmationCodeCreate
+from Dbengin import get_db
+from app import models
+from app.schema.user import UserCreate, UserOut
+from app.utils.emailUtils import send_email
+from app.utils.general_util import hash_password
+from app.utils.error_handling import exception_handler
+from app.services.user import get_user
+
+router = APIRouter()
+
+
+def add_confirmation_code(confirmation_code: ConfirmationCodeCreate, db: Session = Depends(get_db)):
+    confirmation_code = models.ConfirmationCode(**confirmation_code.dict())
+    db.add(confirmation_code)
+    db.flush()
+    return confirmation_code
+
+async def sendConfirmationMail(email:str, user_id:int, db : Session):
+    confirmation_code = ConfirmationCodeCreate(
+        user_id=user_id,
+        email=email,
+        code=str(uuid.uuid1()),
+        status= enums.CodeStatus.pending,
+        expires_at="2024-12-31 23:59:59"
+    )
+    add_confirmation_code(confirmation_code, db)
+    subject = "Account Confirmation"
+    recipients = [email]
+    await send_email(subject, recipients, enums.EmailTemplate.confirmaccount, email,confirmation_code.code)
+   
+
+
+@router.post("/users" , response_model=UserOut , status_code= status.HTTP_201_CREATED)
+async def create_user(entry: UserCreate, db: Session = Depends(get_db)):
+    user_in_db = db.query(models.User).filter(models.User.email == entry.email).first()
+    if user_in_db:
+      if user_in_db:
+        return UserOut(
+            message="User with this email already exists",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if entry.password != entry.confirm_password:
+        return UserOut(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="Passwords must match!"
+        )
+
+    try:
+       entry.password = hash_password(entry.password)
+       user = entry.dict()
+       user.pop("confirm_password")
+       user = models.User(**user)
+       db.add(user)
+       db.flush()
+       await sendConfirmationMail(user.email, user.id, db)
+    except Exception as e:
+        db.rollback()
+        error = exception_handler(e, db)
+        return UserOut(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=error,
+        )
+
+    return UserOut(**user.__dict__,
+        status_code=status.HTTP_201_CREATED,
+        message="User created successfully and a confirmation email sent."
+    )
+
+@router.get("/users/{user_id}", response_model=UserOut ,  status_code=status.HTTP_200_OK)
+def get_user_by_id(user_id: int, db: Session = Depends(get_db)):
+        return get_user(user_id, db)
+
+@router.get('/me/', response_model= UserOut  , status_code=status.HTTP_200_OK)
+def get_current_user(db: Session = Depends(get_db)):
+        return get_user(id,db)
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    return delete_user_from_db(user_id,db)

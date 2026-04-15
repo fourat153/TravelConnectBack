@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+env/
+.env
+alembic/versions/__pycache__/
+*.dump
+*.sql.bak
+.vscode/
