@@ -59,6 +59,8 @@ async def create_user(entry: UserCreate, db: Session = Depends(get_db)):
        db.add(user)
        db.flush()
        await sendConfirmationMail(user.email, user.id, db)
+       db.commit()
+       db.refresh(user)
     except Exception as e:
         db.rollback()
         error = exception_handler(e, db)
@@ -83,3 +85,4 @@ def get_current_user(db: Session = Depends(get_db)):
 @router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     return delete_user_from_db(user_id,db)
+

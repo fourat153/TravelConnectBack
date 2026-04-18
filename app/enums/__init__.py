@@ -10,6 +10,7 @@ from .Emailtemplate import EmailTemplate
 from .PrivacyEntityType import PrivacyEntityType
 from .code_status import CodeStatus
 from .email_template import emailTemplate
+from .confirmed import ConfirmedEnum
 __all__ = [
     "GenderEnum",
     "AccountStatusEnum",
@@ -22,5 +23,6 @@ __all__ = [
     "EmailTemplate",
     "PrivacyEntityType",
     "CodeStatus",
-    "emailTemplate"
+    "emailTemplate",
+    "ConfirmedEnum"
 ]
