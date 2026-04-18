@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi.params import Depends
 from ..database import get_db
  
-def get_user(user_id : int , db : Session):
+def get_user(user_id : int , db : Session  = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         return UserOut(

@@ -7,3 +7,6 @@ class ConfirmationCodeCreate(OurBaseModel):
     code: str
     status: CodeStatus
     expires_at: str
+
+class CodeDeactivate(OurBaseModel):
+    status: CodeStatus
