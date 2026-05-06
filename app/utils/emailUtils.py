@@ -1,5 +1,5 @@
 
-from fastapi_mail import ConnectionConfig, MessageSchema , FastMail
+from fastapi_mail import ConnectionConfig, MessageSchema , FastMail ,MessageType
 from ..config import settings
 from jinja2 import Environment, select_autoescape, PackageLoader
 from ..enums import EmailTemplate
@@ -17,7 +17,7 @@ conf = ConnectionConfig(
 )
 env = Environment(
     loader=PackageLoader('app', 'templates'),
-    autoescape=select_autoescape(['html', 'xml'])
+    autoescape=False 
 )
 
 template_name_per_email = {
@@ -25,21 +25,21 @@ template_name_per_email = {
 
 }
 
-async def send_email(subject: str, recipients: List, email_template: EmailTemplate, email: str, code: str, additional_props: dict = {}):
+async def send_email(subject: str, recipients: List, email_template: EmailTemplate, email: str, code: str,user_id:int = None):
     template_name = template_name_per_email[email_template]
     template = env.get_template(template_name)
     html = template.render(
         name=email,
         code=code,
+        user_id = user_id,
         subject=subject,
-        **additional_props
     )
 
     message = MessageSchema(
-        subject=subject,
-        recipients=recipients,
-        html=html,
-        subtype="html"
+    subject=subject,
+    recipients=recipients,
+    body=html,
+    subtype=MessageType.html
     )
 
     fm = FastMail(conf)

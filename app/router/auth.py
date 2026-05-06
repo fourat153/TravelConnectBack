@@ -5,9 +5,11 @@ from app import models, enums
 from app.utils import  oauth2
 from sqlalchemy.orm import Session
 from ..database import get_db
-from app.services.confirmationCode import confirme_account , disable_code
-from app.schema.auth import Token
+from app.services.confirmation_code import confirme_account , disable_code
+from app.schema.auth import Token 
+from app.schema.user import UserOut 
 from datetime import datetime
+from app.utils import oauth2
 from fastapi.security import OAuth2PasswordRequestForm
 from app.utils import general_util
 from fastapi import Response
@@ -16,7 +18,7 @@ router = APIRouter()
 
 @router.patch('/confirmAccount', response_model= ConfirmAccountOut)
 def confirm_account(entry: ConfirmAccount, db: Session = Depends(get_db)): 
-    confirmation_code = db.query(models.ConfirmationCode).filter(models.ConfirmationCode.code == entry.confirmation_code).first()
+    confirmation_code = db.query(models.ConfirmationCode).filter(models.ConfirmationCode.code == entry.confirmation_code).first() 
     if not confirmation_code:
         return ConfirmAccountOut(
             message="Invalid confirmation code",
@@ -54,7 +56,7 @@ def confirm_account(entry: ConfirmAccount, db: Session = Depends(get_db)):
         status_code=status.HTTP_200_OK
     )
 
-@router.post('/login', response_model= Token)
+@router.post('/login', response_model= UserOut)
 def login_user(user_credentials: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db) , response: Response  = None):
     user = db.query(models.User).filter(
                 models.User.email == user_credentials.username).first()
@@ -88,20 +90,28 @@ def login_user(user_credentials: OAuth2PasswordRequestForm = Depends(), db: Sess
         httponly=False,
         secure=False,
         samesite="strict",
-        max_age=15 * 60,
+        max_age=10000 * 60,
         path="/"
     )
-    return Token(access_token=None,
-                         token_type="bearer",
-                         message="Login successful",
-                         status_code=status.HTTP_200_OK
-                )
+    return UserOut(**user.__dict__,
+    message="Login successful",
+    status_code=status.HTTP_200_OK
+        )
 
     
-router.post('/logout')
-def logout_user(response: Response):
-    response.delete_cookie
+@router.post('/logout')
+def logout_user(current_user: TokenData = Depends(oauth2.get_current_user), response: Response  = None):
+    response.delete_cookie(
+        key="access_token",
+        httponly=False,
+        secure=False,
+        samesite="strict",
+        path="/"
+    )
     return Token(
         message="Logout successful",
         status_code=status.HTTP_200_OK
     )
+@router.get("/auth/verify")
+def verify_session(current_user: TokenData = Depends(oauth2.get_current_user)):
+    return { "valid": True }

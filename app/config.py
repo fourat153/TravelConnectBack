@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_min: int
+    CLOUDINARY_CLOUD_NAME: str
+    CLOUDINARY_API_KEY: str
+    CLOUDINARY_API_SECRET: str
     model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()
