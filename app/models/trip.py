@@ -8,10 +8,10 @@ class Trip(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
-    title = Column(String(20), nullable=False)
+    title = Column(String, nullable=False)
     city_id = Column(Integer, ForeignKey("city.id"), nullable=True)
-    privacy_id = Column(Integer, ForeignKey("privacy.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     user = relationship("User")
     city = relationship("City") 
+    stops = relationship("Stop", back_populates="trip", order_by="Stop.order")

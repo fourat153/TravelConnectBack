@@ -1,4 +1,4 @@
-from app.schema.ourBaseModel import OurBaseModel
+from app.schema.our_base_model import OurBaseModel
 from app.enums.code_status import CodeStatus
 
 class ConfirmationCodeCreate(OurBaseModel):

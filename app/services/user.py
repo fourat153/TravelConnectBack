@@ -1,12 +1,12 @@
 from fastapi import status
 from app.schema.user import UserOut
-from app import models
+from app.models import User
 from sqlalchemy.orm import Session
 from fastapi.params import Depends
 from ..database import get_db
  
 def get_user(user_id : int , db : Session  = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return UserOut(
             message="User {user_id} not found",

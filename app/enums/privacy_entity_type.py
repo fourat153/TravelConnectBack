@@ -1,7 +1,7 @@
 
-import enum
+from enum import Enum
 
-class PrivacyEntityType(str, enum.Enum):
+class PrivacyEntityType(Enum):
     user = "user"
     trip = "trip"
     stop = "stop"

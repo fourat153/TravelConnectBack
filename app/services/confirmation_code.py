@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi.params import Depends
 from ..database import get_db
 from app.schema.user import UserConfirm
-from app.enums.accountStatusEnum import AccountStatusEnum
+from app.enums.account_status_enum import AccountStatusEnum
 from app.enums.confirmed import ConfirmedEnum
 from app.enums.code_status import CodeStatus
 from app.schema.confirmation_code import CodeDeactivate
@@ -21,6 +21,7 @@ def confirme_account(email : str , db :  Session = Depends(get_db)):
         )
     update = UserConfirm(is_confirmed= ConfirmedEnum.Confirmed , status= AccountStatusEnum.active)
     user_query.update(update.dict(), synchronize_session=False)
+    
 def disable_code(confirmation_code: str, db : Session = Depends(get_db)):
     code_query = db.query(models.ConfirmationCode).filter(models.ConfirmationCode.code == confirmation_code)
     code = code_query.first()

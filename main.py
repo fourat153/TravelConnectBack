@@ -15,6 +15,12 @@ app.add_middleware(
 
 app.include_router(router.user.router)
 app.include_router(router.auth.router)
+app.include_router(router.trip.router)
+app.include_router(router.city.router)
+app.include_router(router.stop.router)
+app.include_router(router.privacy_settings.router)
+app.include_router(router.post.router)
+app.include_router(router.friendships.router)
 
 @app.get("/")
 async def root():

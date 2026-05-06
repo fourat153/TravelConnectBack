@@ -1,70 +1,96 @@
-
-<div style="background: #f0f4f8; padding: 2rem; font-family: Georgia, 'Times New Roman', serif;">
-  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; border: 0.5px solid #ddd;">
-    
-    <div style="background: #1a1a2e; padding: 2rem 2.5rem 1.5rem; text-align: center;">
-      <div style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 1rem;">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="14" r="13" stroke="#5DCAA5" stroke-width="1.5"/>
-          <path d="M8 14 Q14 8 20 14 Q14 20 8 14Z" fill="#5DCAA5" opacity="0.8"/>
-          <circle cx="14" cy="14" r="2" fill="#ffffff"/>
-        </svg>
-        <span style="color: #ffffff; font-size: 18px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; font-family: Georgia, serif;">TravelConnect</span>
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Account Confirmation." />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style type="text/css">
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f9fafb;
+        font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+        color: #4b5563;
+        -webkit-font-smoothing: antialiased;
+        direction: ltr;
+        text-align: left;
+      }
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 40px auto;
+        background-color: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      .content {
+        padding: 48px 40px;
+        text-align: center;
+      }
+      h1 {
+        color: #111827;
+        font-size: 28px;
+        font-weight: 800;
+        margin: 0 0 16px;
+        letter-spacing: -0.02em;
+        line-height: 1.3;
+      }
+      p {
+        font-size: 15px;
+        line-height: 1.6;
+        margin: 0 0 24px;
+      }
+      .button {
+        display: inline-block;
+        background-color: #3b82f6;
+        color: #ffffff !important;
+        padding: 16px 36px;
+        border-radius: 12px;
+        text-decoration: none !important;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+      }
+      .footer {
+        margin-top: 40px;
+        font-size: 13px;
+        color: #9ca3af;
+      }
+      .accent-line {
+        display: inline-block;
+        width: 48px;
+        height: 4px;
+        background-color: #3b82f6;
+        border-radius: 2px;
+        margin-bottom: 24px;
+      }
+      @media only screen and (max-width: 600px) {
+        .container { margin: 20px 10px; border-radius: 16px; }
+        .content { padding: 32px 24px; }
+        h1 { font-size: 24px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <div class="accent-line"></div>
+        <h1>Welcome to TravelConnect! 🌍</h1>
+        <p>
+          Hello <strong>{{name}}</strong>,<br /><br />
+          ✈️ Welcome to <strong>TravelConnect</strong>! We're thrilled to have you join our community of travelers.
+        </p>
+        <p>🗺️ To get started and explore the world with us, please confirm your account by clicking the button below:</p>
+        <a href="http://localhost:4200/confirm-account?confirmation_code={{code}}&user_id={{user_id}}&registered=true" class="button">
+          ✅ Confirm My Account
+        </a>
+        <div class="footer">
+          <p>Let's Explore the World Together! 🧳</p>
+        </div>
       </div>
-      <div style="width: 40px; height: 1px; background: #5DCAA5; margin: 0 auto;"></div>
     </div>
-
-    <div style="padding: 2.5rem 2.5rem 1.5rem; border-bottom: 0.5px solid #eee;">
-      <p style="font-size: 13px; color: #888; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 1rem; font-family: 'Helvetica Neue', sans-serif;">Account confirmation</p>
-      <h1 style="font-size: 26px; color: #1a1a2e; font-weight: 400; margin: 0 0 1.2rem; line-height: 1.3;">Welcome aboard,<br><em style="color: #0F6E56;">Ahmed</em></h1>
-      <p style="font-size: 15px; color: #555; line-height: 1.8; margin: 0; font-family: 'Helvetica Neue', sans-serif;">
-        Your journey starts here. Confirm your email address to activate your account and begin exploring the world with TravelConnect.
-      </p>
-    </div>
-
-    <div style="padding: 2.5rem 2.5rem; text-align: center; border-bottom: 0.5px solid #eee;">
-      <a href="#" style="display: inline-block; background: #0F6E56; color: #ffffff; text-decoration: none; padding: 1rem 3rem; border-radius: 4px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; font-family: 'Helvetica Neue', sans-serif;">Confirm my account</a>
-      <p style="font-size: 12px; color: #aaa; margin: 1.2rem 0 0; font-family: 'Helvetica Neue', sans-serif;">This link expires in 24 hours</p>
-    </div>
-
-    <div style="padding: 1.5rem 2.5rem; border-bottom: 0.5px solid #eee;">
-      <div style="display: flex; gap: 1.5rem; align-items: flex-start;">
-        <div style="flex: 1; text-align: center; padding: 1rem;">
-          <div style="width: 32px; height: 32px; margin: 0 auto 0.5rem; opacity: 0.6;">
-            <svg viewBox="0 0 32 32" fill="none" width="32" height="32">
-              <circle cx="16" cy="12" r="5" stroke="#1a1a2e" stroke-width="1.5"/>
-              <path d="M6 26c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke="#1a1a2e" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <p style="font-size: 11px; color: #888; margin: 0; font-family: 'Helvetica Neue', sans-serif;">Build your profile</p>
-        </div>
-        <div style="flex: 1; text-align: center; padding: 1rem; border-left: 0.5px solid #eee; border-right: 0.5px solid #eee;">
-          <div style="width: 32px; height: 32px; margin: 0 auto 0.5rem; opacity: 0.6;">
-            <svg viewBox="0 0 32 32" fill="none" width="32" height="32">
-              <path d="M16 4 C10 4 6 9 6 14 C6 22 16 28 16 28 C16 28 26 22 26 14 C26 9 22 4 16 4Z" stroke="#1a1a2e" stroke-width="1.5"/>
-              <circle cx="16" cy="14" r="3" stroke="#1a1a2e" stroke-width="1.5"/>
-            </svg>
-          </div>
-          <p style="font-size: 11px; color: #888; margin: 0; font-family: 'Helvetica Neue', sans-serif;">Plan your trips</p>
-        </div>
-        <div style="flex: 1; text-align: center; padding: 1rem;">
-          <div style="width: 32px; height: 32px; margin: 0 auto 0.5rem; opacity: 0.6;">
-            <svg viewBox="0 0 32 32" fill="none" width="32" height="32">
-              <path d="M6 16 C6 16 10 10 16 10 C22 10 26 16 26 16 C26 16 22 22 16 22 C10 22 6 16 6 16Z" stroke="#1a1a2e" stroke-width="1.5"/>
-              <circle cx="16" cy="16" r="3" stroke="#1a1a2e" stroke-width="1.5"/>
-            </svg>
-          </div>
-          <p style="font-size: 11px; color: #888; margin: 0; font-family: 'Helvetica Neue', sans-serif;">Share moments</p>
-        </div>
-      </div>
-    </div>
-
-    <div style="padding: 1.2rem 2.5rem; background: #f8f8f8; border-top: 0.5px solid #eee; text-align: center;">
-      <p style="font-size: 11px; color: #aaa; margin: 0; line-height: 1.7; font-family: 'Helvetica Neue', sans-serif;">
-        If you didn't create a TravelConnect account, you can safely ignore this email.<br>
-        &copy; 2026 TravelConnect &nbsp;&middot;&nbsp; Tunisia
-      </p>
-    </div>
-
-  </div>
-</div>
+  </body>
+</html>

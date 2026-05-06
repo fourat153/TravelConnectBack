@@ -1,4 +1,7 @@
 from enum import Enum
 
-class emailTemplate(Enum):
-    account_confirmation = "account_confirmation"
+
+class EmailTemplate(str, Enum):
+    resetpassword = 'resetPassword'
+    confirmaccount = 'confirmAccount'
+    invitation = 'invitation'

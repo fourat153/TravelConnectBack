@@ -11,6 +11,12 @@ from app.utils.emailUtils import send_email
 from app.utils.general_util import hash_password
 from app.utils.error_handling import exception_handler
 from app.services.user import get_user
+from app.utils import oauth2
+from app.enums import PrivacyEntityType, Onboarding
+from app.schema.onboarding import OnboardingData  , OnboardingOut
+
+
+
 
 router = APIRouter()
 
@@ -32,7 +38,7 @@ async def sendConfirmationMail(email:str, user_id:int, db : Session):
     add_confirmation_code(confirmation_code, db)
     subject = "Account Confirmation"
     recipients = [email]
-    await send_email(subject, recipients, enums.EmailTemplate.confirmaccount, email,confirmation_code.code)
+    await send_email(subject, recipients, enums.EmailTemplate.confirmaccount, email,confirmation_code.code , user_id)
    
 
 
@@ -74,15 +80,55 @@ async def create_user(entry: UserCreate, db: Session = Depends(get_db)):
         message="User created successfully and a confirmation email sent."
     )
 
+@router.get("/users/me", response_model= UserOut  , status_code=status.HTTP_200_OK)
+def get_current(db: Session = Depends(get_db) , current_user=Depends(oauth2.get_current_user)):
+        return get_user(current_user.user_id,db)
+
 @router.get("/users/{user_id}", response_model=UserOut ,  status_code=status.HTTP_200_OK)
-def get_user_by_id(user_id: int, db: Session = Depends(get_db)):
+def get_user_by_id(user_id: int, db: Session = Depends(get_db) , current_user=Depends(oauth2.get_current_user) ):
         return get_user(user_id, db)
 
-@router.get('/me/', response_model= UserOut  , status_code=status.HTTP_200_OK)
-def get_current_user(db: Session = Depends(get_db)):
-        return get_user(id,db)
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     return delete_user_from_db(user_id,db)
 
+@router.put("/users/{user_id}", response_model=UserOut, status_code=status.HTTP_200_OK)
+def update_user(user_id: int, entry: UserCreate, db: Session = Depends(get_db)):
+    return update_user_in_db(user_id, entry, db)
+
+
+
+@router.post("/users/me/onboarding" , response_model=OnboardingOut ,status_code=status.HTTP_200_OK)
+def complete_onboarding(
+    data: OnboardingData,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    user = db.query(models.User).filter(models.User.id == current_user.user_id).first()
+
+    home_city = models.City(
+    lat = data.lat,
+    long = data.lon
+    )
+    db.add(home_city)
+    db.flush()
+    user.city_id = home_city.id 
+    user.has_completed_onboarding = Onboarding.Onboarded
+
+    privacy_setting = models.PrivacySettings(
+        entity_type=PrivacyEntityType.user,
+        entity_id=user.id,
+        privacy_type= data.privacy,
+    )
+    db.add(privacy_setting)
+    db.flush()
+    db.commit()
+    db.refresh(user)
+
+    return OnboardingOut(
+ 
+        has_completed_onboarding = Onboarding.Onboarded,
+        status_code=status.HTTP_201_CREATED,
+        message="Onboarding completed successfully"
+    )
