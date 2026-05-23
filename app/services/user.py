@@ -16,17 +16,3 @@ def get_user(user_id : int , db : Session  = Depends(get_db)):
         message="User  retrieved successfully",
         status_code=status.HTTP_200_OK
     )
-
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        return UserOut(
-                message="User not found",
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
-    db.delete(user)
-    db.commit()
-    return UserOut(
-            message="User deleted successfully",
-            status_code=status.HTTP_200_OK,
-        )

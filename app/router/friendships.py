@@ -1,11 +1,23 @@
-@router.get("/", response_model=FriendshipRequestOut, status_code=status.HTTP_200_OK)
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from starlette import status
+from math import ceil
+from ..database import get_db
+from app.utils import oauth2
+from app import models
+from app.schema.friendships import FriendsData, FriendsOut
+
+router = APIRouter()
+
+
+@router.get("/Friends/me", response_model=FriendsOut, status_code=status.HTTP_200_OK)
 def get_my_friends(
     db: Session = Depends(get_db),
     current_user = Depends(oauth2.get_current_user),
-    page: int = 1,
-    limit: int = 10,
+    page_number: int = 1,
+    page_size: int = 10,
 ):
-    offset = (page - 1) * limit
+    offset = (page_number - 1) * page_size
 
     try:
         query = db.query(models.User).join(
@@ -17,36 +29,40 @@ def get_my_friends(
             )
         )
 
-        total   = query.count()
-        results = query.offset(offset).limit(limit).all()
+        total_records   = query.count()
+        total_pages = ceil(total_records / page_size)
+        results = query.limit(page_size).offset((page_number - 1) * page_size).all()
 
         if not results:
-            return FriendshipRequestOut(
+            return FriendsOut(
                 status_code=status.HTTP_404_NOT_FOUND,
                 message="No friends found.",
             )
 
         friends = [
-            FriendOut(
+            FriendsData(
                 friend_id       = user.id,
-                username        = user.username,
-                profile_picture = user.profile_picture,
+                username        = user.firstname  + " " + user.lastname ,
             )
             for user in results
         ]
 
     except Exception as e:
-        return FriendshipRequestOut(
+        return FriendsOut(
             status_code=status.HTTP_400_BAD_REQUEST,
             message=str(e),
         )
 
-    return FriendshipRequestOut(
+    return FriendsOut(
         status_code = status.HTTP_200_OK,
         message     = "Friends retrieved successfully.",
         data        = friends,
-        total       = total,
-        page        = page,
-        limit       = limit,
-        pages       = ceil(total / limit),
+        total_pages = total_pages,
+        total_records = total_records,
+        page_size   = page_size,
+        page_number  = page_number
     )
+
+@router.delete("/Friends/me", response_model=FriendsOut, status_code=status.HTTP_200_OK)
+def delet () : 
+    pass 

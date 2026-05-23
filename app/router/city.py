@@ -1,11 +1,12 @@
 from fastapi import APIRouter , status
 from fastapi.params import Depends
 from app.schema.account import ConfirmAccount, ConfirmAccountOut
-from app.schema.city import CityCreate, CityOut
+from app.schema.city import CityCreate, CityOut,CityData
 from app import models, enums
 from app.utils import  oauth2
 from sqlalchemy.orm import Session
 from ..database import get_db
+from app.utils.error_handling import exception_handler
 
 
 router = APIRouter()
@@ -15,22 +16,40 @@ def get_cities(db: Session = Depends(get_db)):
     cities = db.query(models.City).all()
     return cities
 
-@router.post('/cities', status_code=status.HTTP_201_CREATED)
-def create_city(entry:CityCreate , db: Session = Depends(get_db)):
-    city_in_db = db.query(models.City).filter(
-    models.City.lat == entry.lat,
-    models.City.long == entry.long
-    ).first()
+@router.post('/cities', response_model=CityOut, status_code=status.HTTP_201_CREATED)
+def create_city(
+    entry: CityCreate,
+    db: Session = Depends(get_db)
+):
+    try:
+        city_in_db = db.query(models.City).filter(
+            models.City.lat == entry.lat,
+            models.City.long == entry.long
+        ).first()
 
-    if city_in_db:
-        return {
-            "message": "City with this name already exists",
-            "status_code": status.HTTP_400_BAD_REQUEST,
-        }
-    new_city = models.City(**entry.dict())
-    db.add(new_city)
-    db.flush()
-    db.commit()
-    db.refresh(new_city)
-    return new_city
+        if city_in_db:
+            return CityOut(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="City with these coordinates already exists",
+            )
+
+        new_city = models.City(**entry.model_dump())
+        db.add(new_city)
+        db.flush()
+        db.commit()
+        db.refresh(new_city)
+
+    except Exception as e:
+        db.rollback()
+        error = exception_handler(e, db)
+        return CityOut(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=error,
+        )
+
+    return CityOut(
+        status_code=status.HTTP_201_CREATED,
+        message="City created successfully",
+        city=CityData.model_validate(new_city)
+    )
 

@@ -21,6 +21,7 @@ app.include_router(router.stop.router)
 app.include_router(router.privacy_settings.router)
 app.include_router(router.post.router)
 app.include_router(router.friendships.router)
+app.include_router(router.friendshipsRequest.router)
 
 @app.get("/")
 async def root():

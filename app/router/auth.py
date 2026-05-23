@@ -45,7 +45,7 @@ def confirm_account(entry: ConfirmAccount, db: Session = Depends(get_db)):
         db.commit()
     except Exception as e:
         db.rollback()
-        #add_error(e, db)
+        error = exception_handler(e, db)
         return UserOut(
             message="There is a problem, try again",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -33,8 +33,9 @@ def create_privacy_setting(
         db.add(setting)
         db.commit()
         db.refresh(setting)
-    except Exception:
+    except Exception as e:
         db.rollback()
+        error = exception_handler(e, db)
         return PrivacySettingsOut(
             status_code=status.HTTP_400_BAD_REQUEST,
             message="Failed to create privacy setting"
