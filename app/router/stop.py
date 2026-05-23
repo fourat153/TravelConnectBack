@@ -8,6 +8,7 @@ from app.models import Stop , Trip , City
 from app.schema.city import CityData
 from app.schema.stop import StopCreate, StopBaseOut, StopsOut, StopOut
 from app.utils import oauth2
+from app.utils.error_handling import exception_handler
 
 router = APIRouter()
 
@@ -45,6 +46,7 @@ def add_stop(
         db.refresh(city)
     except Exception as e:
         db.rollback()
+        error = exception_handler(e, db)
         return StopBaseOut(status_code=status.HTTP_400_BAD_REQUEST, message="Failed to add stop")
 
     return StopBaseOut(

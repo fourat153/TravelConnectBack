@@ -6,6 +6,7 @@ from app.models.image import Image
 from app.models.stop import Stop
 from app.schema.post import PostsOut, SinglePostOut, PostOut
 from app.utils.cloudinary import upload_image
+from app.utils.error_handling import exception_handler
 from app.utils import oauth2
 
 router = APIRouter()
@@ -37,21 +38,30 @@ def create_post(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
-    stop = db.query(Stop).filter(Stop.id == stop_id).first()
-    if not stop:
-        return SinglePostOut(status_code=status.HTTP_404_NOT_FOUND, message="Stop not found")
+    try:
+        stop = db.query(Stop).filter(Stop.id == stop_id).first()
+        if not stop:
+            return SinglePostOut(status_code=status.HTTP_404_NOT_FOUND, message="Stop not found")
 
-    post = Post(stop_id=stop_id, title=title)
-    db.add(post)
-    db.flush()
+        post = Post(stop_id=stop_id, title=title)
+        db.add(post)
+        db.flush()
 
-    for file in images:
-        url = upload_image(file.file.read())
-        image = Image(post_id=post.id, link=url)
-        db.add(image)
+        for file in images:
+            url = upload_image(file.file.read())
+            image = Image(post_id=post.id, link=url)
+            db.add(image)
 
-    db.commit()
-    db.refresh(post)
+        db.commit()
+        db.refresh(post)
+
+    except Exception as e:
+        db.rollback()
+        error = exception_handler(e, db)
+        return SinglePostOut(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=error,
+        )
 
     return SinglePostOut(
         status_code=status.HTTP_201_CREATED,

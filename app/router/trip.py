@@ -2,8 +2,9 @@ from fastapi import APIRouter , status
 from fastapi.params import Depends
 from app.enums import PrivacyEntityType , PrivacyType
 from sqlmodel import Session
+from app.utils.error_handling import exception_handler
 from Dbengin import get_db
-from app.models import User, City, Trip , PrivacySettings
+from app.models import User, City, Trip , PrivacySettings, Friendship
 from app.services.user import get_user
 from app.schema.trip import TripCreate, TripBaseOut , TripsOut , TripOut
 from app.schema.city import CityOut , CityCreate , CityData
@@ -52,6 +53,7 @@ def create_trip(
         db.refresh(trip_privacy)
     except Exception as e:
         db.rollback()
+        error = exception_handler(e, db)
         return TripBaseOut(
             status_code=status.HTTP_400_BAD_REQUEST,
             message="Failed to create trip",
@@ -81,4 +83,40 @@ def get_my_trips(db: Session = Depends(get_db), current_user=Depends(oauth2.get_
         status_code=status.HTTP_200_OK,
         message="Trips retrieved successfully"
     )
+@router.get('/trips/friend/{user_id}', response_model=TripsOut, status_code=status.HTTP_200_OK)
+def get_user_trips(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+):
+    is_friend = db.query(Friendship).filter(
+        (
+            (Friendship.user_1_id == current_user.user_id) & (Friendship.user_2_id == user_id)
+        ) | (
+            (Friendship.user_2_id == current_user.user_id) & (Friendship.user_1_id == user_id)
+        )
+    ).first()
 
+    if not is_friend:
+        return TripsOut(
+            status_code=status.HTTP_403_FORBIDDEN,
+            message="You are not friends with this user.",
+            trips=[]
+        )
+
+    trips = db.query(Trip).filter(
+        Trip.user_id == user_id,
+    ).all()
+
+    if not trips:
+        return TripsOut(
+            status_code=status.HTTP_200_OK,
+            message="No public trips found.",
+            trips=[]
+        )
+
+    return TripsOut(
+        trips=[TripOut.model_validate(trip) for trip in trips],
+        status_code=status.HTTP_200_OK,
+        message="Trips retrieved successfully"
+    )

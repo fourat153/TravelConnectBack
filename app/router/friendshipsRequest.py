@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from starlette import status
-
+from app.utils.error_handling import exception_handler
 from ..database import get_db
 from app.utils import oauth2
 from app import models
-from app.schema.friendships import FriendshipRequestCreate, FriendshipRequestOut
+from app.schema.friendshipsRequest import FriendshipRequestCreate, FriendshipRequestOut
 
 router = APIRouter()
 
@@ -71,6 +71,7 @@ def send_friend_request(
         db.refresh(friend_request)
     except Exception as e:
         db.rollback()
+        error = exception_handler(e, db)
         return FriendshipRequestOut(
             status_code=status.HTTP_400_BAD_REQUEST,
             message=str(e),
