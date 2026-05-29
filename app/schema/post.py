@@ -13,10 +13,22 @@ class PostOut(OurBaseOut):
     stop_id: int
     title: str
     created_at: datetime
-    images: list[ImageOut]
+    images: list[ImageOut] = []
 
 class PostsOut(OurBaseOut):
     posts: list[PostOut] = []
 
 class SinglePostOut(OurBaseModel):
     post: PostOut | None = None
+
+class FeedPostOut(OurBaseModel):
+    id: int
+    authorName: str
+    authorAvatar: str
+    location: str
+    imageUrls: list[str] = []
+    description: str
+    likesCount: int = 0
+    hasLiked: bool = False
+    comments: list[dict] = []
+    createdAt: str

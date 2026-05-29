@@ -18,8 +18,7 @@ class UserOut(OurBaseOut):
     firstname : str | None = None
     lastname : str | None = None
     phone_number: Optional[str] = None
-    has_completed_onboarding: Onboarding | None = None  
-
+    has_completed_onboarding: Onboarding | None = None
 class UserConfirm(OurBaseModel):
     is_confirmed: ConfirmedEnum
     status: AccountStatusEnum

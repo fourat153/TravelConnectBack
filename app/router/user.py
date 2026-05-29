@@ -1,19 +1,19 @@
 import uuid
 from fastapi import APIRouter , status
 from fastapi.params import Depends
-from app import enums
+from .. import enums
 from sqlmodel import Session
-from app.schema.confirmation_code import ConfirmationCodeCreate
+from ..schema.confirmation_code import ConfirmationCodeCreate
 from Dbengin import get_db
-from app import models
-from app.schema.user import UserCreate, UserOut
-from app.utils.emailUtils import send_email
-from app.utils.general_util import hash_password
-from app.utils.error_handling import exception_handler
-from app.services.user import get_user
-from app.utils import oauth2
-from app.enums import PrivacyEntityType, Onboarding
-from app.schema.onboarding import OnboardingData  , OnboardingOut
+from .. import models
+from ..schema.user import UserCreate, UserOut
+from ..utils.emailUtils import send_email
+from ..utils.general_util import hash_password
+from ..utils.error_handling import exception_handler
+from ..services.user import get_user
+from ..utils import oauth2
+from ..enums import PrivacyEntityType, Onboarding
+from ..schema.onboarding import OnboardingData, OnboardingOut
 
 
 
@@ -87,7 +87,6 @@ def get_current(db: Session = Depends(get_db) , current_user=Depends(oauth2.get_
 @router.get("/users/{user_id}", response_model=UserOut ,  status_code=status.HTTP_200_OK)
 def get_user_by_id(user_id: int, db: Session = Depends(get_db) , current_user=Depends(oauth2.get_current_user) ):
         return get_user(user_id, db)
-
 
 
 @router.post("/users/me/onboarding", response_model=OnboardingOut, status_code=status.HTTP_200_OK)

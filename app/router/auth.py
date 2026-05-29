@@ -4,9 +4,11 @@ from app.schema.account import ConfirmAccount, ConfirmAccountOut
 from app import models, enums 
 from app.utils import  oauth2
 from sqlalchemy.orm import Session
+
+from app.utils.error_handling import exception_handler
 from ..database import get_db
 from app.services.confirmation_code import confirme_account , disable_code
-from app.schema.auth import Token 
+from app.schema.auth import Token, TokenData 
 from app.schema.user import UserOut 
 from datetime import datetime
 from app.utils import oauth2
@@ -95,6 +97,7 @@ def login_user(user_credentials: OAuth2PasswordRequestForm = Depends(), db: Sess
     )
     return UserOut(**user.__dict__,
     message="Login successful",
+    access_token=access_token,
     status_code=status.HTTP_200_OK
         )
 

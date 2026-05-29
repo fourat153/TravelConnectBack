@@ -9,6 +9,8 @@ from .trip import Trip
 from .stop import Stop
 from .post import Post
 from .image import Image
+from .comment import Comment
+from .post_like import PostLike
 from .Friendship import Friendship
 from .FriendshipRequest import FriendshipRequest
 from .FriendshipStatus import FriendshipStatus
