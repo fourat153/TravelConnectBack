@@ -2,6 +2,7 @@ from fastapi import APIRouter, status
 from fastapi.params import Depends
 from sqlalchemy.orm import Session
 from Dbengin import get_db
+from app.utils.error_handling import exception_handler
 from app.enums import PrivacyEntityType
 from app.models import PrivacySettings
 from app.schema.privacy_settings import PrivacySettingsCreate, PrivacySettingsUpdate, PrivacySettingsOut

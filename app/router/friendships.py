@@ -43,6 +43,7 @@ def get_my_friends(
             FriendsData(
                 friend_id       = user.id,
                 username        = user.firstname  + " " + user.lastname ,
+                profile_picture = user.profile_picture,
             )
             for user in results
         ]

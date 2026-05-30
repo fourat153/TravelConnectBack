@@ -13,3 +13,5 @@ class Post(Base):
 
     stop    = relationship("Stop", back_populates="posts")
     images  = relationship("Image", back_populates="post", cascade="all, delete-orphan")
+    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
+    likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")

@@ -1,8 +1,10 @@
+from typing import Optional
 from app.schema.our_base_model import OurBaseModel, OurBaseOut
 
 class FriendsData(OurBaseModel):
     friend_id: int
     username: str
+    profile_picture: Optional[str] = None
 
 class FriendsOut(OurBaseOut):
     data: list[FriendsData]
