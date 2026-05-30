@@ -19,6 +19,7 @@ class User(Base):
     is_confirmed = Column(Enum(ConfirmedEnum), nullable=False, default=ConfirmedEnum.NotConfirmed)
     city_id = Column(Integer, ForeignKey("city.id"), nullable=True)
     has_completed_onboarding= Column(Enum(Onboarding) , nullable = False  , default = Onboarding.Not_Onboarded ,  server_default='Not_Onboarded')
+    profile_picture = Column(String, nullable=True)
 
     city = relationship("City")
     sent_requests        = relationship("FriendshipRequest", foreign_keys="FriendshipRequest.sender_id",   back_populates="sender")

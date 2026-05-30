@@ -1,5 +1,6 @@
 import uuid
-from fastapi import APIRouter , status
+from typing import Optional
+from fastapi import APIRouter, status, File, Form, UploadFile
 from fastapi.params import Depends
 from .. import enums
 from sqlmodel import Session
@@ -14,9 +15,9 @@ from ..services.user import get_user
 from ..utils import oauth2
 from ..enums import PrivacyEntityType, Onboarding
 from ..schema.onboarding import OnboardingData, OnboardingOut
-
-
-
+from app.utils.cloudinary import upload_image
+from app.schema.city import CityOut, CityData
+from app.enums.gender_enum import GenderEnum
 
 router = APIRouter()
 
@@ -126,3 +127,88 @@ def complete_onboarding(
         status_code=status.HTTP_200_OK,
         message="Onboarding completed successfully"
     )
+
+@router.get("/users/me/city", response_model=CityOut, status_code=status.HTTP_200_OK)
+def get_current_user_city(
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    user = db.query(models.User).filter(models.User.id == current_user.user_id).first()
+    if not user or not user.city_id:
+        return CityOut(status_code=status.HTTP_404_NOT_FOUND, message="City not found for user")
+    city = db.query(models.City).filter(models.City.id == user.city_id).first()
+    if not city:
+        return CityOut(status_code=status.HTTP_404_NOT_FOUND, message="City not found")
+    return CityOut(
+        status_code=status.HTTP_200_OK,
+        message="City retrieved successfully",
+        lat=city.lat,
+        long=city.long
+    )
+
+@router.put("/users/me", response_model=UserOut, status_code=status.HTTP_200_OK)
+def update_user_profile(
+    firstname: str = Form(...),
+    lastname: str = Form(...),
+    email: str = Form(...),
+    gender: Optional[GenderEnum] = Form(None),
+    phone_number: Optional[str] = Form(None),
+    city_lat: Optional[float] = Form(None),
+    city_lon: Optional[float] = Form(None),
+    profile_picture: Optional[UploadFile] = File(default=None),
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    try:
+        user = db.query(models.User).filter(models.User.id == current_user.user_id).first()
+        if not user:
+            return UserOut(status_code=status.HTTP_404_NOT_FOUND, message="User not found")
+
+        # Check if email is already taken by another user
+        if email != user.email:
+            existing = db.query(models.User).filter(models.User.email == email).first()
+            if existing:
+                return UserOut(status_code=status.HTTP_400_BAD_REQUEST, message="Email already in use")
+            user.email = email
+
+        user.firstname = firstname
+        user.lastname = lastname
+        user.gender = gender
+        user.phone_number = phone_number
+
+        # Update city if coordinates are provided
+        if city_lat is not None and city_lon is not None:
+            city = db.query(models.City).filter(models.City.lat == city_lat, models.City.long == city_lon).first()
+            if not city:
+                city = models.City(lat=city_lat, long=city_lon)
+                db.add(city)
+                db.flush()
+            user.city_id = city.id
+
+        # Upload profile picture to Cloudinary if provided
+        if profile_picture and profile_picture.filename:
+            url = upload_image(profile_picture.file.read(), folder="profiles")
+            user.profile_picture = url
+
+        db.commit()
+        db.refresh(user)
+
+        return UserOut(
+            id=user.id,
+            email=user.email,
+            firstname=user.firstname,
+            lastname=user.lastname,
+            gender=user.gender,
+            phone_number=user.phone_number,
+            profile_picture=user.profile_picture,
+            has_completed_onboarding=user.has_completed_onboarding,
+            status_code=status.HTTP_200_OK,
+            message="Profile updated successfully"
+        )
+    except Exception as e:
+        db.rollback()
+        error = exception_handler(e, db)
+        return UserOut(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=error,
+        )

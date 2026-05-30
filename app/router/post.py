@@ -284,7 +284,7 @@ def get_feed_posts(
             continue
 
         author_name = f"{user.firstname} {user.lastname}"
-        author_avatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+        author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
         image_urls = [img.link for img in post.images]
         likes_count = len(post.likes)
         has_liked = any(like.user_id == current_user.user_id for like in post.likes)
