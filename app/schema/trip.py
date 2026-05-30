@@ -2,21 +2,27 @@ from typing import Optional
 from app.schema.our_base_model import OurBaseModel, OurBaseOut
 from app.enums import PrivacyType
 from app.schema.city import CityOut , CityData, CityCreate
-
-class TripBaseOut(OurBaseOut):
-    id: int
-    title: str
-    city: Optional[CityData] = None
+from app.schema.stop import StopInput
+from typing import Optional, List
 
 class TripCreate(OurBaseModel):
-    title: str
+    title:             str
     include_home_city: bool = False
-    privacy: Optional[PrivacyType] | None
-
-class TripOut(OurBaseModel):
-    id: int
+    privacy:           Optional[PrivacyType] | None
+    stops:             List[StopInput] = []
+ 
+ 
+class TripBaseOut(OurBaseOut):
+    id:    int
     title: str
-    city: Optional[CityData] = None
-
+    city:  Optional[CityData] = None
+ 
+ 
+class TripOut(OurBaseModel):
+    id:    int
+    title: str
+    city:  Optional[CityData] = None
+ 
+ 
 class TripsOut(OurBaseOut):
-    trips : list[TripOut] = []
+    trips: list[TripOut] = []

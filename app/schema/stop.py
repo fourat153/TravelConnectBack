@@ -25,3 +25,10 @@ class StopBaseOut(OurBaseOut):
 
 class StopsOut(OurBaseOut):
     stops: Optional[List[StopOut]] = None
+
+class StopInput(OurBaseModel):
+    label: str
+    lat:   float
+    lon:   float
+    order: int
+ 

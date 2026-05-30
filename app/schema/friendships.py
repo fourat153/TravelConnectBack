@@ -12,3 +12,9 @@ class FriendsOut(OurBaseOut):
     total_records : int
     page_size   : int
     page_number  : int 
+
+class FriendFirstStop(OurBaseModel):
+    lat: float
+    lon: float
+    stop_title: str
+ 
