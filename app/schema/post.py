@@ -14,6 +14,8 @@ class PostOut(OurBaseOut):
     title: str
     created_at: datetime
     images: list[ImageOut] = []
+    likes_count: int = 0
+    has_liked: bool = False
 
 class PostsOut(OurBaseOut):
     posts: list[PostOut] = []

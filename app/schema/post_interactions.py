@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from app.schema.our_base_model import OurBaseModel, OurBaseOut
 
@@ -13,6 +14,7 @@ class CommentData(OurBaseModel):
     user_id: int
     content: str
     created_at: datetime
+    username: Optional[str] = "Traveler"
 
 
 class CommentsOut(OurBaseOut):

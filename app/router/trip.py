@@ -1,4 +1,4 @@
-from fastapi import APIRouter , status
+from fastapi import APIRouter, HTTPException , status
 from fastapi.params import Depends
 from app.enums import PrivacyEntityType , PrivacyType
 from sqlmodel import Session
@@ -90,6 +90,7 @@ def create_trip(
         id=trip.id,
         title=trip.title,
         city=home_city,
+        created_at=trip.created_at,
         status_code=status.HTTP_201_CREATED,
         message="Trip created successfully",
     )   
