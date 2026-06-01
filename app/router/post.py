@@ -58,6 +58,10 @@ def get_stop_posts(
         return PostsOut(status_code=status.HTTP_404_NOT_FOUND, message="Stop not found")
 
     posts = db.query(Post).filter(Post.stop_id == stop_id).all()
+    for p in posts:
+        p.likes_count = len(p.likes)
+        p.has_liked = any(like.user_id == current_user.user_id for like in p.likes)
+
     return PostsOut(
         status_code=status.HTTP_200_OK,
         message="Posts retrieved successfully",
@@ -146,6 +150,9 @@ def get_post_comments(
         return CommentsOut(status_code=status.HTTP_404_NOT_FOUND, message="Post not found")
 
     comments = db.query(Comment).filter(Comment.post_id == post_id).order_by(Comment.created_at.desc()).all()
+    for comment in comments:
+        comment.username = f"{comment.user.firstname} {comment.user.lastname}" if comment.user else "Traveler"
+
     return CommentsOut(
         status_code=status.HTTP_200_OK,
         message="Comments retrieved successfully",
@@ -173,6 +180,7 @@ def create_post_comment(
         db.add(comment)
         db.commit()
         db.refresh(comment)
+        comment.username = f"{user.firstname} {user.lastname}"
 
     except Exception as e:
         db.rollback()

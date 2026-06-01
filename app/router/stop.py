@@ -66,7 +66,7 @@ def get_trip_stops(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
-    trip = db.query(Trip).filter(Trip.id == trip_id, Trip.user_id == current_user.user_id).first()
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
     if not trip:
         return StopsOut(status_code=status.HTTP_404_NOT_FOUND, message="Trip not found")
 
