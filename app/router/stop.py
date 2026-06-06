@@ -1,4 +1,4 @@
-from fastapi import APIRouter , status
+from fastapi import APIRouter , status , BackgroundTasks
 from fastapi.params import Depends
 from app import enums
 from sqlmodel import Session
@@ -9,6 +9,7 @@ from app.schema.city import CityData
 from app.schema.stop import StopCreate, StopBaseOut, StopsOut, StopOut
 from app.utils import oauth2
 from app.utils.error_handling import exception_handler
+from app.services.affinity import increment_city_affinity
 
 router = APIRouter()
 
@@ -16,6 +17,7 @@ router = APIRouter()
 def add_stop(
     trip_id: int,
     entry: StopCreate,
+        background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -48,7 +50,7 @@ def add_stop(
         db.rollback()
         error = exception_handler(e, db)
         return StopBaseOut(status_code=status.HTTP_400_BAD_REQUEST, message="Failed to add stop")
-
+    background_tasks.add_task(increment_city_affinity, current_user.user_id, city.id)
     return StopBaseOut(
         id=stop.id,
         trip_id=stop.trip_id,
