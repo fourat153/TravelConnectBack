@@ -6,6 +6,8 @@ from ..database import get_db
 from app.utils import oauth2
 from app import models
 from app.schema.friendships import FriendsData, FriendsOut
+from app.services.suggestions import get_friend_suggestions
+from app.schema.suggestions import SuggestionsOut, SuggestionUser
 
 router = APIRouter()
 
@@ -62,6 +64,32 @@ def get_my_friends(
         total_records = total_records,
         page_size   = page_size,
         page_number  = page_number
+    )
+
+@router.get("/users/suggestions", response_model=SuggestionsOut, status_code=status.HTTP_200_OK)
+def friend_suggestions(
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    try:
+        rows = get_friend_suggestions(current_user.user_id, db)
+        data = [
+            SuggestionUser(
+                id=r.id,
+                firstname=r.firstname,
+                lastname=r.lastname,
+                profile_picture=r.profile_picture,
+                mutual_friends_count=r.mutual_friends_count or 0
+            )
+            for r in rows
+        ]
+    except Exception as e:
+        return SuggestionsOut(status_code=status.HTTP_400_BAD_REQUEST, message=str(e))
+
+    return SuggestionsOut(
+        status_code=status.HTTP_200_OK,
+        message="Suggestions retrieved successfully",
+        data=data
     )
 
 @router.delete("/Friends/me", response_model=FriendsOut, status_code=status.HTTP_200_OK)

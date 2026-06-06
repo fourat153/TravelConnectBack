@@ -14,3 +14,4 @@ from .post_like import PostLike
 from .Friendship import Friendship
 from .FriendshipRequest import FriendshipRequest
 from .FriendshipStatus import FriendshipStatus
+from .UserCityAffinity import UserCityAffinity

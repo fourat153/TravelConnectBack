@@ -13,7 +13,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router.user.router)
 app.include_router(router.auth.router)
 app.include_router(router.trip.router)
 app.include_router(router.city.router)
@@ -21,6 +20,7 @@ app.include_router(router.stop.router)
 app.include_router(router.privacy_settings.router)
 app.include_router(router.post.router)
 app.include_router(router.friendships.router)
+app.include_router(router.user.router)
 app.include_router(router.friendshipsRequest.router)
 
 @app.get("/")
