@@ -27,6 +27,7 @@ class FeedPostOut(OurBaseModel):
     id: int
     authorName: str
     authorAvatar: str
+    tripTitle: str | None = None
     location: str
     imageUrls: list[str] = []
     description: str

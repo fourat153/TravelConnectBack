@@ -312,6 +312,7 @@ def get_feed_posts(
             authorName=author_name,
             authorAvatar=author_avatar,
             location=stop.title,
+            tripTitle=trip.title,
             imageUrls=image_urls,
             description=post.title,
             likesCount=likes_count,
