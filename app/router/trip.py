@@ -38,16 +38,16 @@ def create_trip(
     privacy_type = PrivacyType(entry.privacy) if entry.privacy else user_profile_privacy.privacy_type
 
     try:
-       
+
         trip = Trip(
             user_id=current_user.user_id,
             title=entry.title,
             city_id=home_city.id if home_city else None,
         )
         db.add(trip)
-        db.flush() 
+        db.flush()
 
-       
+
         trip_privacy = PrivacySettings(
             entity_type=PrivacyEntityType.trip,
             entity_id=trip.id,
@@ -55,15 +55,23 @@ def create_trip(
         )
         db.add(trip_privacy)
 
-       
-        for stop_input in entry.stops:
-           
+        # Normalize input: either from_city/to_city or an explicit stops list
+        if entry.from_city and entry.to_city:
+            stops_to_create = [
+                StopInput(label=entry.from_city.label, lat=entry.from_city.lat, lon=entry.from_city.lon, order=0),
+                StopInput(label=entry.to_city.label, lat=entry.to_city.lat, lon=entry.to_city.lon, order=1),
+            ]
+        else:
+            stops_to_create = entry.stops
+
+        for stop_input in stops_to_create:
+
             city = City(
                 lat=stop_input.lat,
                 long=stop_input.lon,
             )
             db.add(city)
-            db.flush()  
+            db.flush()
 
             stop = Stop(
                 trip_id=trip.id,
@@ -93,7 +101,11 @@ def create_trip(
         created_at=trip.created_at,
         status_code=status.HTTP_201_CREATED,
         message="Trip created successfully",
-    )   
+    )
+
+
+
+
 @router.get('/trips/me', response_model=TripsOut, status_code=status.HTTP_200_OK)
 def get_my_trips(db: Session = Depends(get_db), current_user=Depends(oauth2.get_current_user)):
     trips = db.query(Trip).filter(Trip.user_id == current_user.user_id).all()
