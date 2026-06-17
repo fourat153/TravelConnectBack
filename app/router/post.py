@@ -318,7 +318,9 @@ def get_feed_posts(
             likesCount=likes_count,
             hasLiked=has_liked,
             comments=comments,
-            createdAt=get_relative_time(post.created_at)
+            createdAt=get_relative_time(post.created_at),
+            lat=stop.city.lat if stop.city else None,
+            long=stop.city.long if stop.city else None
         ))
 
     return feed_posts
