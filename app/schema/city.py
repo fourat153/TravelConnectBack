@@ -12,3 +12,8 @@ class CityData(OurBaseModel):
     id: int
     lat : Optional[float] = None
     long : Optional[float] = None
+
+class CityInput(OurBaseModel):
+    label: str
+    lat: float
+    lon: float    
