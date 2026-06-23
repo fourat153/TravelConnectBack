@@ -35,5 +35,3 @@ class FeedPostOut(OurBaseModel):
     hasLiked: bool = False
     comments: list[dict] = []
     createdAt: str
-    lat: float | None = None
-    long: float | None = None
