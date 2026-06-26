@@ -25,6 +25,7 @@ class SinglePostOut(OurBaseModel):
 
 class FeedPostOut(OurBaseModel):
     id: int
+    authorId: int
     authorName: str
     authorAvatar: str
     tripTitle: str | None = None

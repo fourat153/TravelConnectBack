@@ -309,6 +309,7 @@ def get_feed_posts(
 
         feed_posts.append(FeedPostOut(
             id=post.id,
+            authorId=user.id,
             authorName=author_name,
             authorAvatar=author_avatar,
             location=stop.title,
@@ -324,6 +325,59 @@ def get_feed_posts(
         ))
 
     return feed_posts
+
+
+@router.get('/posts/user/{user_id}', response_model=List[FeedPostOut], status_code=status.HTTP_200_OK)
+def get_user_posts(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    posts = db.query(Post).join(Stop).join(Trip).filter(Trip.user_id == user_id).order_by(Post.created_at.desc()).all()
+
+    user_posts = []
+    for post in posts:
+        stop = post.stop
+        trip = stop.trip if stop else None
+        user = trip.user if trip else None
+
+        if not stop or not trip or not user:
+            continue
+
+        author_name = f"{user.firstname} {user.lastname}"
+        author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+        image_urls = [img.link for img in post.images]
+        likes_count = len(post.likes)
+        has_liked = any(like.user_id == current_user.user_id for like in post.likes)
+        comments = [
+            {
+                "id": comment.id,
+                "userId": comment.user_id,
+                "username": f"{comment.user.firstname} {comment.user.lastname}" if comment.user else "Traveler",
+                "text": comment.content,
+                "createdAt": get_relative_time(comment.created_at),
+            }
+            for comment in post.comments
+        ]
+
+        user_posts.append(FeedPostOut(
+            id=post.id,
+            authorId=user.id,
+            authorName=author_name,
+            authorAvatar=author_avatar,
+            location=stop.title,
+            tripTitle=trip.title,
+            imageUrls=image_urls,
+            description=post.title,
+            likesCount=likes_count,
+            hasLiked=has_liked,
+            comments=comments,
+            createdAt=get_relative_time(post.created_at),
+            lat=stop.city.lat if stop.city else None,
+            long=stop.city.long if stop.city else None
+        ))
+
+    return user_posts
 
 
 @router.post('/posts/feed', response_model=SinglePostOut, status_code=status.HTTP_201_CREATED)
