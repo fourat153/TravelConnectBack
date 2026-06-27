@@ -10,6 +10,8 @@ from app.schema.stop import StopCreate, StopBaseOut, StopsOut, StopOut
 from app.utils import oauth2
 from app.utils.error_handling import exception_handler
 from app.services.affinity import increment_city_affinity
+from app.schema.stop import StopReorder
+from app.schema.our_base_model import OurBaseOut
 
 router = APIRouter()
 
@@ -80,3 +82,42 @@ def get_trip_stops(
         status_code=status.HTTP_200_OK,
         message="Stops retrieved successfully"
     )
+
+@router.put('/trips/{trip_id}/stops/reorder', response_model=OurBaseOut, status_code=status.HTTP_200_OK)
+def reorder_stops(
+    trip_id: int,
+    entry: StopReorder,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    trip = db.query(Trip).filter(Trip.id == trip_id, Trip.user_id == current_user.user_id).first()
+    if not trip:
+        return OurBaseOut(status_code=status.HTTP_404_NOT_FOUND, message="Trip not found")
+
+    # First pass: Set to temporary negative values to avoid UniqueConstraint conflicts
+    for index, stop_id in enumerate(entry.stop_ids):
+        stop = db.query(Stop).filter(Stop.id == stop_id, Stop.trip_id == trip_id).first()
+        if stop:
+            stop.order = -(index + 1)
+            db.add(stop)
+    
+    try:
+        db.flush()
+    except Exception as e:
+        db.rollback()
+        return OurBaseOut(status_code=status.HTTP_400_BAD_REQUEST, message="Failed to flush temporary stop order")
+
+    # Second pass: Set to final 0-indexed values
+    for index, stop_id in enumerate(entry.stop_ids):
+        stop = db.query(Stop).filter(Stop.id == stop_id, Stop.trip_id == trip_id).first()
+        if stop:
+            stop.order = index
+            db.add(stop)
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        return OurBaseOut(status_code=status.HTTP_400_BAD_REQUEST, message="Failed to commit final stop order")
+
+    return OurBaseOut(status_code=status.HTTP_200_OK, message="Stops reordered successfully")
