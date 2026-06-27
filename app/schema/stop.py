@@ -31,4 +31,7 @@ class StopInput(OurBaseModel):
     lat:   float
     lon:   float
     order: int
+
+class StopReorder(OurBaseModel):
+    stop_ids: List[int]
  
