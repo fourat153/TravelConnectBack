@@ -1,0 +1,13 @@
+[tool.pytest.ini_options]
+# Only discover tests inside the tests/ folder (keeps pytest out of .venv)
+testpaths = ["tests"]
+# Make the repo root importable so `import app` and `import Dbengin` work
+pythonpath = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra -q"
+markers = [
+    "unit: fast, isolated tests with no DB or network",
+    "integration: tests that exercise the app/DB end to end",
+]

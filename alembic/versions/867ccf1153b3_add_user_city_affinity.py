@@ -1,7 +1,7 @@
 """add user_city_affinity
 
 Revision ID: 867ccf1153b3
-Revises: c26f018346b1
+Revises: 507fb12e4786
 Create Date: 2026-06-06 17:53:30.102740
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '867ccf1153b3'
-down_revision: Union[str, Sequence[str], None] = 'c26f018346b1'
+down_revision: Union[str, Sequence[str], None] = '507fb12e4786'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
