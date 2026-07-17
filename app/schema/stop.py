@@ -5,13 +5,14 @@ from app.schema.city import CityData
 class StopCreate(OurBaseModel):
     lat: float
     long: float
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
+    order: int
 
 class StopOut(OurBaseModel):
     id: int
     trip_id: int
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
     order: int
     city: CityData

@@ -17,10 +17,11 @@ from app.models.privacy_setting import PrivacySettings
 from app.models.stop import Stop
 from app.models.trip import Trip
 from app.models.user import User
+from app.models.video import Video
 from app.schema.post_interactions import CommentCreate, CommentData, CommentsOut, LikeData, SingleCommentOut, SingleLikeOut
 from app.schema.post import FeedPostOut, PostOut, PostsOut, SinglePostOut
 from app.utils import oauth2
-from app.utils.cloudinary import upload_image
+from app.utils.cloudinary import upload_image, upload_video
 from app.utils.error_handling import exception_handler
 
 router = APIRouter()
@@ -74,6 +75,7 @@ def create_post(
     stop_id: int,
     title: Annotated[str, Form()],
     images: List[UploadFile] = File(default=[]),
+    videos: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -92,6 +94,13 @@ def create_post(
             url = upload_image(file.file.read())
             img = Image(post_id=post.id, link=url)
             db.add(img)
+
+        for file in videos:
+            if not file.filename:
+                continue
+            url = upload_video(file.file.read())
+            vid = Video(post_id=post.id, link=url)
+            db.add(vid)
 
         db.commit()
         db.refresh(post)
@@ -294,6 +303,7 @@ def get_feed_posts(
         author_name = f"{user.firstname} {user.lastname}"
         author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
         image_urls = [img.link for img in post.images]
+        video_urls = [vid.link for vid in post.videos]
         likes_count = len(post.likes)
         has_liked = any(like.user_id == current_user.user_id for like in post.likes)
         comments = [
@@ -315,6 +325,7 @@ def get_feed_posts(
             location=stop.title,
             tripTitle=trip.title,
             imageUrls=image_urls,
+            videoUrls=video_urls,
             description=post.title,
             likesCount=likes_count,
             hasLiked=has_liked,
@@ -347,6 +358,7 @@ def get_user_posts(
         author_name = f"{user.firstname} {user.lastname}"
         author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
         image_urls = [img.link for img in post.images]
+        video_urls = [vid.link for vid in post.videos]
         likes_count = len(post.likes)
         has_liked = any(like.user_id == current_user.user_id for like in post.likes)
         comments = [
@@ -368,6 +380,7 @@ def get_user_posts(
             location=stop.title,
             tripTitle=trip.title,
             imageUrls=image_urls,
+            videoUrls=video_urls,
             description=post.title,
             likesCount=likes_count,
             hasLiked=has_liked,
@@ -387,6 +400,7 @@ def create_feed_post(
     lat: Annotated[float, Form()] = 0.0,
     long: Annotated[float, Form()] = 0.0,
     images: List[UploadFile] = File(default=[]),
+    videos: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -434,6 +448,13 @@ def create_feed_post(
             url = upload_image(file.file.read())
             img = Image(post_id=post.id, link=url)
             db.add(img)
+
+        for file in videos:
+            if not file.filename:
+                continue
+            url = upload_video(file.file.read())
+            vid = Video(post_id=post.id, link=url)
+            db.add(vid)
 
         db.commit()
         db.refresh(post)

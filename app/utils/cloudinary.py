@@ -11,3 +11,8 @@ cloudinary.config(
 def upload_image(file_bytes: bytes, folder: str = "posts") -> str:
     result = cloudinary.uploader.upload(file_bytes, folder=folder)
     return result["secure_url"]
+
+
+def upload_video(file_bytes: bytes, folder: str = "posts") -> str:
+    result = cloudinary.uploader.upload_large(file_bytes, folder=folder, resource_type="video")
+    return result["secure_url"]
