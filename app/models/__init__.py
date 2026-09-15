@@ -16,3 +16,5 @@ from .Friendship import Friendship
 from .FriendshipRequest import FriendshipRequest
 from .FriendshipStatus import FriendshipStatus
 from .UserCityAffinity import UserCityAffinity
+from .device_token import DeviceToken
+from .notification import Notification

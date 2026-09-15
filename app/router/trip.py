@@ -1,16 +1,19 @@
+import logging
 from fastapi import APIRouter, HTTPException , status
 from fastapi.params import Depends
-from app.enums import PrivacyEntityType , PrivacyType
+from app.enums import NotificationType, PrivacyEntityType , PrivacyType
 from sqlmodel import Session
 from app.utils.error_handling import exception_handler
 from Dbengin import get_db
 from app.models import User, City, Trip , PrivacySettings, Friendship , Stop
 from app.services.user import get_user
+from app.services.notification import NotificationError
+from app.services.notification_service import create_and_send_notification
 from app.schema.trip import TripCreate, TripBaseOut , TripsOut
 from app.schema.friendships import FriendFirstStop
 from app.utils import oauth2
-
 router = APIRouter()
+logger = logging.getLogger(__name__)
 """
 Every trip always contains at least two stops.
 The first stop (order = 0) is the departure city,
@@ -85,6 +88,34 @@ def create_trip(
             status_code=status.HTTP_400_BAD_REQUEST,
             message="Failed to create trip",
         )
+
+    friends = db.query(Friendship).filter(
+        (Friendship.user_1_id == current_user.user_id)
+        | (Friendship.user_2_id == current_user.user_id)
+    ).all()
+    friend_ids = {
+        friendship.user_2_id
+        if friendship.user_1_id == current_user.user_id
+        else friendship.user_1_id
+        for friendship in friends
+    }
+    creator_name = f"{user.firstname} {user.lastname}"
+    for friend_id in friend_ids:
+        try:
+            create_and_send_notification(
+                db=db,
+                recipient_id=friend_id,
+                actor_id=current_user.user_id,
+                notification_type=NotificationType.TRIP_CREATED,
+                title="New Trip",
+                body=f"{creator_name} started a new trip: {trip.title}",
+            )
+        except NotificationError as e:
+            db.rollback()
+            logger.error(f"Failed to send trip notification (FCM error): {e.detail}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to send trip notification: {str(e)}", exc_info=True)
 
     return TripBaseOut(
         id=trip.id,

@@ -1,12 +1,12 @@
+import logging
 from datetime import datetime
 from typing import Annotated, List
-
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
-from sqlalchemy.orm import Session
-
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session, joinedload, selectinload
 from Dbengin import get_db
 from app.enums.privacy_entity_type import PrivacyEntityType
 from app.enums.privacy_type import PrivacyType
+from app.enums import NotificationType
 from app.models.Friendship import Friendship
 from app.models.city import City
 from app.models.comment import Comment
@@ -20,12 +20,14 @@ from app.models.user import User
 from app.models.video import Video
 from app.schema.post_interactions import CommentCreate, CommentData, CommentsOut, LikeData, SingleCommentOut, SingleLikeOut
 from app.schema.post import FeedPostOut, PostOut, PostsOut, SinglePostOut
+from app.services.notification_service import create_and_send_notification
+from app.services.notification import NotificationError
 from app.utils import oauth2
 from app.utils.cloudinary import upload_image, upload_video
 from app.utils.error_handling import exception_handler
 
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 def get_relative_time(dt: datetime) -> str:
     diff = datetime.utcnow() - dt
@@ -58,7 +60,16 @@ def get_stop_posts(
     if not stop:
         return PostsOut(status_code=status.HTTP_404_NOT_FOUND, message="Stop not found")
 
-    posts = db.query(Post).filter(Post.stop_id == stop_id).all()
+    posts = (
+        db.query(Post)
+        .options(
+            selectinload(Post.images),
+            selectinload(Post.videos),
+            selectinload(Post.likes),
+        )
+        .filter(Post.stop_id == stop_id)
+        .all()
+    )
     for p in posts:
         p.likes_count = len(p.likes)
         p.has_liked = any(like.user_id == current_user.user_id for like in p.likes)
@@ -68,7 +79,6 @@ def get_stop_posts(
         message="Posts retrieved successfully",
         posts=[PostOut.model_validate(p) for p in posts]
     )
-
 
 @router.post('/stops/{stop_id}/posts', response_model=SinglePostOut, status_code=status.HTTP_201_CREATED)
 def create_post(
@@ -119,7 +129,6 @@ def create_post(
         post=PostOut.model_validate(post)
     )
 
-
 @router.delete('/posts/{post_id}', response_model=SinglePostOut, status_code=status.HTTP_200_OK)
 def delete_post(
     post_id: int,
@@ -147,7 +156,6 @@ def delete_post(
         message="Post deleted successfully",
     )
 
-
 @router.get('/posts/{post_id}/comments', response_model=CommentsOut, status_code=status.HTTP_200_OK)
 def get_post_comments(
     post_id: int,
@@ -158,7 +166,13 @@ def get_post_comments(
     if not post:
         return CommentsOut(status_code=status.HTTP_404_NOT_FOUND, message="Post not found")
 
-    comments = db.query(Comment).filter(Comment.post_id == post_id).order_by(Comment.created_at.desc()).all()
+    comments = (
+        db.query(Comment)
+        .options(joinedload(Comment.user))
+        .filter(Comment.post_id == post_id)
+        .order_by(Comment.created_at.desc())
+        .all()
+    )
     for comment in comments:
         comment.username = f"{comment.user.firstname} {comment.user.lastname}" if comment.user else "Traveler"
 
@@ -167,7 +181,6 @@ def get_post_comments(
         message="Comments retrieved successfully",
         data=[CommentData.model_validate(comment) for comment in comments]
     )
-
 
 @router.post('/posts/{post_id}/comments', response_model=SingleCommentOut, status_code=status.HTTP_201_CREATED)
 def create_post_comment(
@@ -185,11 +198,58 @@ def create_post_comment(
         if not user:
             return SingleCommentOut(status_code=status.HTTP_404_NOT_FOUND, message="User not found")
 
-        comment = Comment(post_id=post_id, user_id=current_user.user_id, content=payload.content)
+        parent_comment = None
+        if payload.parent_id is not None:
+            parent_comment = db.query(Comment).filter(
+                Comment.id == payload.parent_id,
+                Comment.post_id == post_id,
+            ).first()
+            if not parent_comment:
+                return SingleCommentOut(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    message="Parent comment not found",
+                )
+
+        comment = Comment(
+            post_id=post_id,
+            user_id=current_user.user_id,
+            parent_id=payload.parent_id,
+            content=payload.content,
+        )
         db.add(comment)
         db.commit()
         db.refresh(comment)
         comment.username = f"{user.firstname} {user.lastname}"
+
+        # Notify the parent author for replies, otherwise notify the post owner.
+        try:
+            if parent_comment:
+                recipient = parent_comment.user
+                notification_type = NotificationType.COMMENT_REPLY
+                notification_title = "New Reply"
+                notification_body = "{commenter_name} replied to your comment"
+            else:
+                recipient = post.stop.trip.user if post.stop and post.stop.trip else None
+                notification_type = NotificationType.POST_COMMENT
+                notification_title = "New Comment"
+                notification_body = "{commenter_name} commented on your post"
+
+            if recipient and recipient.id != current_user.user_id:
+                commenter_name = f"{user.firstname} {user.lastname}"
+                result = create_and_send_notification(
+                    db=db,
+                    recipient_id=recipient.id,
+                    actor_id=current_user.user_id,
+                    post_id=post_id,
+                    notification_type=notification_type,
+                    title=notification_title,
+                    body=notification_body.format(commenter_name=commenter_name),
+                )
+                logger.info(f"Notification created: id={result['notification'].id}, recipient={recipient.id}, actor={current_user.user_id}")
+        except NotificationError as e:
+            logger.error(f"Failed to send comment notification (FCM error): {e.detail}")
+        except Exception as e:
+            logger.error(f"Failed to send comment notification: {str(e)}", exc_info=True)
 
     except Exception as e:
         db.rollback()
@@ -204,7 +264,6 @@ def create_post_comment(
         message="Comment created successfully",
         data=CommentData.model_validate(comment)
     )
-
 
 @router.post('/posts/{post_id}/likes', response_model=SingleLikeOut, status_code=status.HTTP_201_CREATED)
 def like_post(
@@ -251,7 +310,6 @@ def like_post(
         data=LikeData.model_validate(like)
     )
 
-
 @router.delete('/posts/{post_id}/likes', response_model=SingleLikeOut, status_code=status.HTTP_200_OK)
 def unlike_post(
     post_id: int,
@@ -283,13 +341,26 @@ def unlike_post(
         message="Post unliked successfully",
     )
 
-
 @router.get('/posts/feed', response_model=List[FeedPostOut], status_code=status.HTTP_200_OK)
 def get_feed_posts(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
-    posts = db.query(Post).join(Stop).join(Trip).order_by(Post.created_at.desc()).all()
+    posts = (
+        db.query(Post)
+        .options(
+            joinedload(Post.stop).joinedload(Stop.trip).joinedload(Trip.user),
+            joinedload(Post.stop).joinedload(Stop.city),
+            selectinload(Post.images),
+            selectinload(Post.videos),
+            selectinload(Post.likes),
+            selectinload(Post.comments).joinedload(Comment.user),
+        )
+        .join(Stop)
+        .join(Trip)
+        .order_by(Post.created_at.desc())
+        .all()
+    )
 
     feed_posts = []
     for post in posts:
@@ -337,6 +408,61 @@ def get_feed_posts(
 
     return feed_posts
 
+@router.get('/posts/{post_id}', response_model=FeedPostOut, status_code=status.HTTP_200_OK)
+def get_post_by_id(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    post = (
+        db.query(Post)
+        .options(
+            joinedload(Post.stop).joinedload(Stop.trip).joinedload(Trip.user),
+            joinedload(Post.stop).joinedload(Stop.city),
+            selectinload(Post.images),
+            selectinload(Post.videos),
+            selectinload(Post.likes),
+            selectinload(Post.comments).joinedload(Comment.user),
+        )
+        .filter(Post.id == post_id)
+        .first()
+    )
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    stop = post.stop
+    trip = stop.trip if stop else None
+    user = trip.user if trip else None
+    if not stop or not trip or not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post details not found")
+
+    author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+    comments = [
+        {
+            "id": comment.id,
+            "userId": comment.user_id,
+            "username": f"{comment.user.firstname} {comment.user.lastname}" if comment.user else "Traveler",
+            "text": comment.content,
+            "createdAt": get_relative_time(comment.created_at),
+        }
+        for comment in post.comments
+    ]
+
+    return FeedPostOut(
+        id=post.id,
+        authorId=user.id,
+        authorName=f"{user.firstname} {user.lastname}",
+        authorAvatar=author_avatar,
+        tripTitle=trip.title,
+        location=stop.title,
+        imageUrls=[image.link for image in post.images],
+        videoUrls=[video.link for video in post.videos],
+        description=post.title,
+        likesCount=len(post.likes),
+        hasLiked=any(like.user_id == current_user.user_id for like in post.likes),
+        comments=comments,
+        createdAt=get_relative_time(post.created_at),
+    )
 
 @router.get('/posts/user/{user_id}', response_model=List[FeedPostOut], status_code=status.HTTP_200_OK)
 def get_user_posts(
@@ -344,7 +470,22 @@ def get_user_posts(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
-    posts = db.query(Post).join(Stop).join(Trip).filter(Trip.user_id == user_id).order_by(Post.created_at.desc()).all()
+    posts = (
+        db.query(Post)
+        .options(
+            joinedload(Post.stop).joinedload(Stop.trip).joinedload(Trip.user),
+            joinedload(Post.stop).joinedload(Stop.city),
+            selectinload(Post.images),
+            selectinload(Post.videos),
+            selectinload(Post.likes),
+            selectinload(Post.comments).joinedload(Comment.user),
+        )
+        .join(Stop)
+        .join(Trip)
+        .filter(Trip.user_id == user_id)
+        .order_by(Post.created_at.desc())
+        .all()
+    )
 
     user_posts = []
     for post in posts:
@@ -391,7 +532,6 @@ def get_user_posts(
         ))
 
     return user_posts
-
 
 @router.post('/posts/feed', response_model=SinglePostOut, status_code=status.HTTP_201_CREATED)
 def create_feed_post(

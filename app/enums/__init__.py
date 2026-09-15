@@ -5,6 +5,7 @@ from .comment_entity_enum import CommentEntityEnum
 from .tag_entity_enum import TagEntityEnum
 from .friendship_status import FriendshipStatusEnum
 from .notification_type_enum import NotificationTypeEnum
+from .notification_type import NotificationType
 from .notification_status import NotificationStatus
 from .email_template import EmailTemplate
 from .privacy_entity_type import PrivacyEntityType
@@ -21,6 +22,7 @@ __all__ = [
     "TagEntityEnum",
     "FriendshipStatusEnum",
     "NotificationTypeEnum",
+    "NotificationType",
     "NotificationStatus",
     "EmailTemplate",
     "PrivacyEntityType",

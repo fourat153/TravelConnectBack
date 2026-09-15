@@ -28,3 +28,10 @@ class User(Base):
     friendships_as_user2 = relationship("Friendship", foreign_keys="Friendship.user_2_id", back_populates="user_2")
     comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan")
     post_likes = relationship("PostLike", back_populates="user", cascade="all, delete-orphan")
+    device_tokens = relationship("DeviceToken", back_populates="user", cascade="all, delete-orphan")
+    notifications_received = relationship(
+        "Notification", foreign_keys="Notification.recipient_id", back_populates="recipient", cascade="all, delete-orphan"
+    )
+    notifications_acted = relationship(
+        "Notification", foreign_keys="Notification.actor_id", back_populates="actor"
+    )

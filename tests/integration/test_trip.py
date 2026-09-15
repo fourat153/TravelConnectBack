@@ -2,7 +2,8 @@
 import pytest
 
 from app.enums import AccountStatusEnum, ConfirmedEnum, GenderEnum, PrivacyEntityType, PrivacyType
-from app.models import City, Stop, Trip, User, PrivacySettings, Friendship
+from app.enums import NotificationType
+from app.models import City, Notification, Stop, Trip, User, PrivacySettings, Friendship
 from app.utils.general_util import hash_password
 
 
@@ -118,6 +119,32 @@ def test_create_trip_success(client, db_session):
     ).first()
     assert trip_privacy is not None
     assert trip_privacy.privacy_type == PrivacyType.public
+
+
+@pytest.mark.integration
+def test_create_trip_notifies_friends(client, db_session):
+    user = _create_user(db_session, email="trip-notification-user@test.com")
+    friend = _create_user(db_session, email="trip-notification-friend@test.com")
+    stranger = _create_user(db_session, email="trip-notification-stranger@test.com")
+    _create_friendship(db_session, user.id, friend.id)
+    _login(client, user.email)
+
+    response = client.post(
+        "/trips",
+        json={
+            "title": "Weekend Escape",
+            "from_city": {"lat": 40.7128, "lon": -74.0060, "label": "New York"},
+            "to_city": {"lat": 34.0522, "lon": -118.2437, "label": "Los Angeles"},
+        },
+    )
+
+    assert response.status_code == 201
+    notifications = db_session.query(Notification).all()
+    assert [(notification.recipient_id, notification.type) for notification in notifications] == [
+        (friend.id, NotificationType.TRIP_CREATED),
+    ]
+    assert notifications[0].actor_id == user.id
+    assert notifications[0].recipient_id != stranger.id
 
 
 @pytest.mark.integration

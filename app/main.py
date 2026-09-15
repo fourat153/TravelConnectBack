@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from . import router
 from . import models
+from .utils import firebase
 
 app = FastAPI()
 
@@ -23,6 +24,7 @@ app.include_router(router.seed_router)
 app.include_router(router.friendships.router)
 app.include_router(router.user.router)
 app.include_router(router.friendshipsRequest.router)
+app.include_router(router.notification_router, tags=["notification"])
 
 @app.get("/")
 async def root():
