@@ -5,7 +5,6 @@ from .trip import router as trip_router
 from .stop import router as stop_router
 from .privacy_settings import router as privacy_settings_router
 from .post import router as posts_router
-from .seed import router as seed_router
 from .friendships import router as friendships_router
 from .friendshipsRequest import router as friendshipsRequest_router
 from .notification import router as notification_router
