@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import or_
 from starlette import status
 from math import ceil
 from ..database import get_db
@@ -8,8 +9,66 @@ from app import models
 from app.schema.friendships import FriendsData, FriendsOut
 from app.services.suggestions import get_friend_suggestions
 from app.schema.suggestions import SuggestionsOut, SuggestionUser
+from app.schema.map_search import MapSearchCity, MapSearchFriend, MapSearchOut, MapSearchStop
 
 router = APIRouter()
+
+
+@router.get("/Friends/search", response_model=MapSearchOut, status_code=status.HTTP_200_OK)
+def search_friends_and_stops(
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+):
+    query = (q or "").strip()
+    if not query:
+        return MapSearchOut(friends=[], stops=[])
+
+    friend_user = aliased(models.User)
+    friendship = models.Friendship
+    friend_filter = or_(
+        (friendship.user_1_id == current_user.user_id) & (friendship.user_2_id == friend_user.id),
+        (friendship.user_2_id == current_user.user_id) & (friendship.user_1_id == friend_user.id),
+    )
+    matching_friends = db.query(friend_user).join(friendship, friend_filter).filter(
+        or_(
+            friend_user.firstname.ilike(f"%{query}%"),
+            friend_user.lastname.ilike(f"%{query}%"),
+        )
+    ).distinct().all()
+
+    friend_ids = db.query(friend_user.id).join(friendship, friend_filter).subquery()
+    visible_owner_ids = or_(
+        models.Trip.user_id == current_user.user_id,
+        models.Trip.user_id.in_(friend_ids),
+    )
+    matching_stops = db.query(models.Stop).join(models.Stop.trip).join(models.Stop.city).filter(
+        visible_owner_ids,
+        or_(
+            models.Stop.title.ilike(f"%{query}%"),
+            models.Stop.description.ilike(f"%{query}%"),
+            models.City.name.ilike(f"%{query}%"),
+        ),
+    ).all()
+
+    friends = [
+        MapSearchFriend(
+            friend_id=user.id,
+            username=f"{user.firstname} {user.lastname}",
+            profile_picture=user.profile_picture,
+        )
+        for user in matching_friends
+    ]
+    stops = [
+        MapSearchStop(
+            id=stop.id,
+            trip_id=stop.trip_id,
+            title=stop.title,
+            city=MapSearchCity(name=stop.city.name, lat=stop.city.lat, long=stop.city.long),
+        )
+        for stop in matching_stops
+    ]
+    return MapSearchOut(friends=friends, stops=stops)
 
 
 @router.get("/Friends/me", response_model=FriendsOut, status_code=status.HTTP_200_OK)

@@ -6,5 +6,6 @@ class City(Base):
     __tablename__ = "city"
 
     id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=True)
     lat = Column(Float, nullable=False)
     long = Column(Float, nullable=False)
