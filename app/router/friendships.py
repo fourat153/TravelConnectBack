@@ -9,13 +9,13 @@ from app import models
 from app.schema.friendships import FriendsData, FriendsOut
 from app.services.suggestions import get_friend_suggestions
 from app.schema.suggestions import SuggestionsOut, SuggestionUser
-from app.schema.map_search import MapSearchCity, MapSearchFriend, MapSearchOut, MapSearchStop
+from app.schema.map_search import MapSearchFriend, MapSearchOut
 
 router = APIRouter()
 
 
 @router.get("/Friends/search", response_model=MapSearchOut, status_code=status.HTTP_200_OK)
-def search_friends_and_stops(
+def search_friends(
     q: str | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
@@ -37,20 +37,6 @@ def search_friends_and_stops(
         )
     ).distinct().all()
 
-    friend_ids = db.query(friend_user.id).join(friendship, friend_filter).subquery()
-    visible_owner_ids = or_(
-        models.Trip.user_id == current_user.user_id,
-        models.Trip.user_id.in_(friend_ids),
-    )
-    matching_stops = db.query(models.Stop).join(models.Stop.trip).join(models.Stop.city).filter(
-        visible_owner_ids,
-        or_(
-            models.Stop.title.ilike(f"%{query}%"),
-            models.Stop.description.ilike(f"%{query}%"),
-            models.City.name.ilike(f"%{query}%"),
-        ),
-    ).all()
-
     friends = [
         MapSearchFriend(
             friend_id=user.id,
@@ -59,16 +45,7 @@ def search_friends_and_stops(
         )
         for user in matching_friends
     ]
-    stops = [
-        MapSearchStop(
-            id=stop.id,
-            trip_id=stop.trip_id,
-            title=stop.title,
-            city=MapSearchCity(name=stop.city.name, lat=stop.city.lat, long=stop.city.long),
-        )
-        for stop in matching_stops
-    ]
-    return MapSearchOut(friends=friends, stops=stops)
+    return MapSearchOut(friends=friends, stops=[])
 
 
 @router.get("/Friends/me", response_model=FriendsOut, status_code=status.HTTP_200_OK)

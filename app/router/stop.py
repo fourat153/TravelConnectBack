@@ -10,6 +10,7 @@ from app.schema.stop import StopCreate, StopBaseOut, StopsOut, StopOut
 from app.utils import oauth2
 from app.utils.error_handling import exception_handler
 from app.services.affinity import increment_city_affinity
+from app.services.trip_privacy import can_view_trip
 from app.schema.stop import StopReorder
 from app.schema.our_base_model import OurBaseOut
 
@@ -132,12 +133,11 @@ def get_trip_stops(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
-    trip = db.query(Trip).filter(
-        Trip.id == trip_id,
-        Trip.user_id == current_user.user_id,
-    ).first()
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
     if not trip:
         return StopsOut(status_code=status.HTTP_404_NOT_FOUND, message="Trip not found")
+    if not can_view_trip(db, trip, current_user.user_id):
+        return StopsOut(status_code=status.HTTP_403_FORBIDDEN, message="You do not have permission to view this trip")
 
     stops = db.query(Stop).filter(Stop.trip_id == trip_id).order_by(Stop.order).all()
     stops_out = [StopOut.model_validate(stop) for stop in stops]

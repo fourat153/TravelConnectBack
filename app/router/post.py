@@ -25,6 +25,7 @@ from app.services.notification import NotificationError
 from app.utils import oauth2
 from app.utils.cloudinary import upload_image, upload_video
 from app.utils.error_handling import exception_handler
+from app.services.trip_privacy import can_view_trip
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -362,13 +363,25 @@ def get_feed_posts(
         .all()
     )
 
+    friend_ids = {
+        friendship.user_2_id
+        if friendship.user_1_id == current_user.user_id
+        else friendship.user_1_id
+        for friendship in db.query(Friendship).filter(
+            (Friendship.user_1_id == current_user.user_id)
+            | (Friendship.user_2_id == current_user.user_id)
+        ).all()
+    }
+
     feed_posts = []
     for post in posts:
         stop = post.stop
         trip = stop.trip if stop else None
         user = trip.user if trip else None
 
-        if not stop or not trip or not user:
+        if not stop or not trip or not user or not can_view_trip(
+            db, trip, current_user.user_id, friend_ids
+        ):
             continue
 
         author_name = f"{user.firstname} {user.lastname}"
@@ -390,6 +403,8 @@ def get_feed_posts(
 
         feed_posts.append(FeedPostOut(
             id=post.id,
+            stop_id=stop.id,
+            trip_id=trip.id,
             authorId=user.id,
             authorName=author_name,
             authorAvatar=author_avatar,
@@ -450,6 +465,8 @@ def get_post_by_id(
 
     return FeedPostOut(
         id=post.id,
+        stop_id=stop.id,
+        trip_id=trip.id,
         authorId=user.id,
         authorName=f"{user.firstname} {user.lastname}",
         authorAvatar=author_avatar,
@@ -462,6 +479,8 @@ def get_post_by_id(
         hasLiked=any(like.user_id == current_user.user_id for like in post.likes),
         comments=comments,
         createdAt=get_relative_time(post.created_at),
+        lat=stop.city.lat if stop.city else None,
+        long=stop.city.long if stop.city else None,
     )
 
 @router.get('/posts/user/{user_id}', response_model=List[FeedPostOut], status_code=status.HTTP_200_OK)
@@ -515,6 +534,8 @@ def get_user_posts(
 
         user_posts.append(FeedPostOut(
             id=post.id,
+            stop_id=stop.id,
+            trip_id=trip.id,
             authorId=user.id,
             authorName=author_name,
             authorAvatar=author_avatar,

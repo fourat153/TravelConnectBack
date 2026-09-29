@@ -19,6 +19,10 @@ class VideoOut(OurBaseModel):
 class PostOut(OurBaseOut):
     id: int
     stop_id: int
+    trip_id: int | None = None
+    trip_title: str | None = None
+    lat: float | None = None
+    long: float | None = None
     title: str
     created_at: datetime
     images: list[ImageOut] = Field(default_factory=list)
@@ -37,10 +41,14 @@ class SinglePostOut(OurBaseModel):
 
 class FeedPostOut(OurBaseModel):
     id: int
+    stop_id: int
+    trip_id: int
     author_id: int = Field(alias="authorId")
     author_name: str = Field(alias="authorName")
     author_avatar: str = Field(alias="authorAvatar")
     trip_title: str | None = Field(default=None, alias="tripTitle")
+    lat: float | None = None
+    long: float | None = None
     location: str
     image_urls: list[str] = Field(default_factory=list, alias="imageUrls")
     video_urls: list[str] = Field(default_factory=list, alias="videoUrls")
