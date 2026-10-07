@@ -14,11 +14,14 @@ def create_and_send_notification(
     title: str,
     body: str,
     actor_id: int | None = None,
+    trip_id: int | None = None,
     post_id: int | None = None,
+    sender_id: int | None = None,
 ) -> dict[str, Notification | list[str]]:
     notification = Notification(
         recipient_id=recipient_id,
         actor_id=actor_id,
+        trip_id=trip_id,
         post_id=post_id,
         type=notification_type,
     )
@@ -39,7 +42,9 @@ def create_and_send_notification(
                     title=title,
                     body=body,
                     post_id=post_id,
+                    trip_id=trip_id,
                     actor_id=actor_id,
+                    sender_id=sender_id,
                 )
             )
         except NotificationError as exc:

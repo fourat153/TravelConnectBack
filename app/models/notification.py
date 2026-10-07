@@ -13,6 +13,7 @@ class Notification(Base):
     id = Column(Integer, primary_key=True)
     recipient_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
     actor_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=True)
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True)
     type = Column(Enum(NotificationType), nullable=False)
     is_read = Column(Boolean, nullable=False, default=False)

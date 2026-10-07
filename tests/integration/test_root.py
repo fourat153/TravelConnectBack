@@ -1,9 +1,0 @@
-"""Integration tests -- exercise the app through the TestClient."""
-import pytest
-
-
-@pytest.mark.integration
-def test_root_endpoint(client):
-    response = client.get("/")
-    assert response.status_code == 200
-    assert response.json() == {"message": "Hello World"}

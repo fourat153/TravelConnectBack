@@ -40,10 +40,7 @@ def add_stop(
         )
 
     try:
-        # Validate stop insertion position
-        # order 0 = departure
-        # last order = destination
-        # New stops can only be inserted between them
+       
         stop_count = (
             db.query(Stop)
             .filter(Stop.trip_id == trip_id)
@@ -56,7 +53,6 @@ def add_stop(
                 message="Stops can only be added between departure and destination"
             )
 
-        # Find existing city or create a new one
         city = (
             db.query(City)
             .filter(
@@ -74,7 +70,6 @@ def add_stop(
             db.add(city)
             db.flush()
 
-        # Shift existing stops to make room
         stops_to_shift = (
             db.query(Stop)
             .filter(

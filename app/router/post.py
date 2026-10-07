@@ -222,7 +222,6 @@ def create_post_comment(
         db.refresh(comment)
         comment.username = f"{user.firstname} {user.lastname}"
 
-        # Notify the parent author for replies, otherwise notify the post owner.
         try:
             if parent_comment:
                 recipient = parent_comment.user

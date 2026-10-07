@@ -7,6 +7,16 @@ class FriendshipRequestCreate(OurBaseModel):
 
 
 class FriendshipRequestOut(OurBaseOut):
-    id:          Optional[int] = None
-    sender_id:   Optional[int] = None
+    id: Optional[int] = None
+    sender_id: Optional[int] = None
     receiver_id: Optional[int] = None
+    status: Optional[str] = None
+
+
+class IncomingFriendshipRequestOut(FriendshipRequestOut):
+    sender_name: str
+    sender_avatar: Optional[str] = None
+
+
+class RelationshipStatusOut(OurBaseModel):
+    status: str

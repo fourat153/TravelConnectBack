@@ -106,6 +106,7 @@ def create_trip(
                 db=db,
                 recipient_id=friend_id,
                 actor_id=current_user.user_id,
+                trip_id=trip.id,
                 notification_type=NotificationType.TRIP_CREATED,
                 title="New Trip",
                 body=f"{creator_name} started a new trip: {trip.title}",
@@ -233,13 +234,11 @@ def delete_trip(
                 message="Trip not found"
             )
 
-        # Delete privacy settings for the trip
         db.query(PrivacySettings).filter(
             PrivacySettings.entity_type == PrivacyEntityType.trip,
             PrivacySettings.entity_id == trip_id
         ).delete()
 
-        # Delete the trip (stops will be deleted via cascade)
         db.delete(trip)
         db.commit()
 

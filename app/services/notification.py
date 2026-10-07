@@ -18,7 +18,9 @@ def send_notification(
     title: str,
     body: str,
     post_id: int | str | None = None,
+    trip_id: int | str | None = None,
     actor_id: int | str | None = None,
+    sender_id: int | str | None = None,
 ) -> str:
     try:
         data_payload = {
@@ -28,8 +30,13 @@ def send_notification(
         if post_id is not None:
             data_payload["post_id"] = str(post_id)
             data_payload["url"] = f"/post/{post_id}"
+        if trip_id is not None:
+            data_payload["trip_id"] = str(trip_id)
+            data_payload["url"] = f"/map?tripId={trip_id}&ownerId={actor_id}"
         if actor_id is not None:
             data_payload["actor_id"] = str(actor_id)
+        if sender_id is not None:
+            data_payload["sender_id"] = str(sender_id)
 
         message = messaging.Message(
             data=data_payload,
@@ -57,7 +64,5 @@ def send_notification(
     except Exception as exc:
         logger.exception("Unexpected error while sending notification")
         raise NotificationError("The notification could not be sent.", 500) from exc
-
-
 
 
