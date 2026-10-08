@@ -1,4 +1,4 @@
-from fastapi import APIRouter , status
+from fastapi import APIRouter, HTTPException, status
 from fastapi.params import Depends
 from app.schema.account import ConfirmAccount, ConfirmAccountOut
 from app.schema.city import CityCreate, CityOut,CityData
@@ -28,9 +28,9 @@ def create_city(
         ).first()
 
         if city_in_db:
-            return CityOut(
+            raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                message="City with these coordinates already exists",
+                detail="City with these coordinates already exists",
             )
 
         new_city = models.City(**entry.model_dump())
@@ -41,10 +41,10 @@ def create_city(
 
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return CityOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create city",
         )
 
     return CityOut(
@@ -52,4 +52,3 @@ def create_city(
         message="City created successfully",
         city=CityData.model_validate(new_city)
     )
-

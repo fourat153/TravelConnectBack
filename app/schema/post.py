@@ -35,7 +35,7 @@ class PostsOut(OurBaseOut):
     posts: list[PostOut] = Field(default_factory=list)
 
 
-class SinglePostOut(OurBaseModel):
+class SinglePostOut(OurBaseOut):
     post: PostOut | None = None
 
 
@@ -45,7 +45,7 @@ class FeedPostOut(OurBaseModel):
     trip_id: int
     author_id: int = Field(alias="authorId")
     author_name: str = Field(alias="authorName")
-    author_avatar: str = Field(alias="authorAvatar")
+    author_avatar: str | None = Field(default=None, alias="authorAvatar")
     trip_title: str | None = Field(default=None, alias="tripTitle")
     lat: float | None = None
     long: float | None = None

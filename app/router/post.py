@@ -59,7 +59,12 @@ def get_stop_posts(
 ):
     stop = db.query(Stop).filter(Stop.id == stop_id).first()
     if not stop:
-        return PostsOut(status_code=status.HTTP_404_NOT_FOUND, message="Stop not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stop not found")
+    if not can_view_trip(db, stop.trip, current_user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this trip",
+        )
 
     posts = (
         db.query(Post)
@@ -93,7 +98,12 @@ def create_post(
     try:
         stop = db.query(Stop).filter(Stop.id == stop_id).first()
         if not stop:
-            return SinglePostOut(status_code=status.HTTP_404_NOT_FOUND, message="Stop not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stop not found")
+        if stop.trip.user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the trip owner can create posts",
+            )
 
         post = Post(stop_id=stop_id, title=title)
         db.add(post)
@@ -116,12 +126,14 @@ def create_post(
         db.commit()
         db.refresh(post)
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return SinglePostOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create post",
         )
 
     return SinglePostOut(
@@ -139,17 +151,27 @@ def delete_post(
     try:
         post = db.query(Post).filter(Post.id == post_id).first()
         if not post:
-            return SinglePostOut(status_code=status.HTTP_404_NOT_FOUND, message="Post not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found",
+            )
+        if not post.stop or not post.stop.trip or post.stop.trip.user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the trip owner can delete posts",
+            )
 
         db.delete(post)
         db.commit()
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return SinglePostOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete post",
         )
 
     return SinglePostOut(
@@ -165,7 +187,12 @@ def get_post_comments(
 ):
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
-        return CommentsOut(status_code=status.HTTP_404_NOT_FOUND, message="Post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    if not post.stop or not can_view_trip(db, post.stop.trip, current_user.user_id):
+        return CommentsOut(
+            status_code=status.HTTP_403_FORBIDDEN,
+            message="You do not have permission to view this trip",
+        )
 
     comments = (
         db.query(Comment)
@@ -193,11 +220,16 @@ def create_post_comment(
     try:
         post = db.query(Post).filter(Post.id == post_id).first()
         if not post:
-            return SingleCommentOut(status_code=status.HTTP_404_NOT_FOUND, message="Post not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        if not post.stop or not can_view_trip(db, post.stop.trip, current_user.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to view this trip",
+            )
 
         user = db.query(User).filter(User.id == current_user.user_id).first()
         if not user:
-            return SingleCommentOut(status_code=status.HTTP_404_NOT_FOUND, message="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         parent_comment = None
         if payload.parent_id is not None:
@@ -206,9 +238,9 @@ def create_post_comment(
                 Comment.post_id == post_id,
             ).first()
             if not parent_comment:
-                return SingleCommentOut(
+                raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    message="Parent comment not found",
+                    detail="Parent comment not found",
                 )
 
         comment = Comment(
@@ -248,15 +280,17 @@ def create_post_comment(
                 logger.info(f"Notification created: id={result['notification'].id}, recipient={recipient.id}, actor={current_user.user_id}")
         except NotificationError as e:
             logger.error(f"Failed to send comment notification (FCM error): {e.detail}")
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Failed to send comment notification: {str(e)}", exc_info=True)
 
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return SingleCommentOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create comment",
         )
 
     return SingleCommentOut(
@@ -274,21 +308,25 @@ def like_post(
     try:
         post = db.query(Post).filter(Post.id == post_id).first()
         if not post:
-            return SingleLikeOut(status_code=status.HTTP_404_NOT_FOUND, message="Post not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        if not post.stop or not can_view_trip(db, post.stop.trip, current_user.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to view this trip",
+            )
 
         user = db.query(User).filter(User.id == current_user.user_id).first()
         if not user:
-            return SingleLikeOut(status_code=status.HTTP_404_NOT_FOUND, message="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         existing_like = db.query(PostLike).filter(
             PostLike.post_id == post_id,
             PostLike.user_id == current_user.user_id
         ).first()
         if existing_like:
-            return SingleLikeOut(
+            raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                message="You already liked this post",
-                data=LikeData.model_validate(existing_like)
+                detail="You already liked this post",
             )
 
         like = PostLike(post_id=post_id, user_id=current_user.user_id)
@@ -296,12 +334,14 @@ def like_post(
         db.commit()
         db.refresh(like)
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return SingleLikeOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to like post",
         )
 
     return SingleLikeOut(
@@ -323,17 +363,26 @@ def unlike_post(
         ).first()
 
         if not like:
-            return SingleLikeOut(status_code=status.HTTP_404_NOT_FOUND, message="Like not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Like not found")
+        if not like.post or not like.post.stop or not can_view_trip(
+            db, like.post.stop.trip, current_user.user_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to view this trip",
+            )
 
         db.delete(like)
         db.commit()
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return SingleLikeOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unlike post",
         )
 
     return SingleLikeOut(
@@ -384,7 +433,7 @@ def get_feed_posts(
             continue
 
         author_name = f"{user.firstname} {user.lastname}"
-        author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+        author_avatar = user.profile_picture
         image_urls = [img.link for img in post.images]
         video_urls = [vid.link for vid in post.videos]
         likes_count = len(post.likes)
@@ -449,8 +498,13 @@ def get_post_by_id(
     user = trip.user if trip else None
     if not stop or not trip or not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post details not found")
+    if not can_view_trip(db, trip, current_user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this trip",
+        )
 
-    author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+    author_avatar = user.profile_picture
     comments = [
         {
             "id": comment.id,
@@ -513,9 +567,11 @@ def get_user_posts(
 
         if not stop or not trip or not user:
             continue
+        if not can_view_trip(db, trip, current_user.user_id):
+            continue
 
         author_name = f"{user.firstname} {user.lastname}"
-        author_avatar = user.profile_picture if user.profile_picture else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+        author_avatar = user.profile_picture
         image_urls = [img.link for img in post.images]
         video_urls = [vid.link for vid in post.videos]
         likes_count = len(post.likes)
@@ -619,12 +675,14 @@ def create_feed_post(
         db.commit()
         db.refresh(post)
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return SinglePostOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create feed post",
         )
 
     return SinglePostOut(

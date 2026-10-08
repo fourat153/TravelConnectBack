@@ -9,6 +9,7 @@ from app.models import User, City, Trip , PrivacySettings, Friendship , Stop
 from app.services.user import get_user
 from app.services.notification import NotificationError
 from app.services.notification_service import create_and_send_notification
+from app.services.trip_privacy import can_view_trip
 from app.schema.trip import TripCreate, TripBaseOut , TripsOut
 from app.schema.friendships import FriendFirstStop
 from app.utils import oauth2
@@ -33,7 +34,15 @@ def create_trip(
         PrivacySettings.entity_type == PrivacyEntityType.user,
         PrivacySettings.entity_id == user.id
     ).first()
-    privacy_type = PrivacyType(entry.privacy) if entry.privacy else user_profile_privacy.privacy_type
+    privacy_type = (
+        PrivacyType(entry.privacy)
+        if entry.privacy
+        else (
+            user_profile_privacy.privacy_type
+            if user_profile_privacy
+            else PrivacyType.public
+        )
+    )
 
     try:
 
@@ -82,11 +91,9 @@ def create_trip(
     except Exception as e:
         db.rollback()
         exception_handler(e, db)
-        return TripBaseOut(
-            id=0,
-            title='',
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="Failed to create trip",
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create trip",
         )
 
     friends = db.query(Friendship).filter(
@@ -159,6 +166,11 @@ def get_friend_first_stop(
     )
     if not first_trip:
         raise HTTPException(status_code=404, detail="Friend has no trips")
+    if not can_view_trip(db, first_trip, current_user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this trip",
+        )
  
     first_stop = (
         db.query(Stop)
@@ -190,10 +202,9 @@ def get_user_trips(
     ).first()
 
     if not is_friend:
-        return TripsOut(
+        raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            message="You are not friends with this user.",
-            trips=[]
+            detail="You are not friends with this user.",
         )
 
     trips = db.query(Trip).filter(
@@ -207,8 +218,13 @@ def get_user_trips(
             trips=[]
         )
 
+    visible_trips = [
+        trip for trip in trips
+        if can_view_trip(db, trip, current_user.user_id)
+    ]
+
     return TripsOut(
-        trips=[TripBaseOut.model_validate(trip) for trip in trips],
+        trips=[TripBaseOut.model_validate(trip) for trip in visible_trips],
         status_code=status.HTTP_200_OK,
         message="Trips retrieved successfully"
     )
@@ -227,12 +243,7 @@ def delete_trip(
         ).first()
 
         if not trip:
-            return TripBaseOut(
-                id=0,
-                title='',
-                status_code=status.HTTP_404_NOT_FOUND,
-                message="Trip not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
 
         db.query(PrivacySettings).filter(
             PrivacySettings.entity_type == PrivacyEntityType.trip,
@@ -242,14 +253,14 @@ def delete_trip(
         db.delete(trip)
         db.commit()
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         exception_handler(e, db)
-        return TripBaseOut(
-            id=0,
-            title='',
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="Failed to delete trip"
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete trip",
         )
 
     return TripBaseOut(

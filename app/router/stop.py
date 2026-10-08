@@ -1,4 +1,4 @@
-from fastapi import APIRouter , status , BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from fastapi.params import Depends
 from app import enums
 from sqlmodel import Session
@@ -34,10 +34,7 @@ def add_stop(
     )
 
     if not trip:
-        return StopBaseOut(
-            status_code=status.HTTP_404_NOT_FOUND,
-            message="Trip not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
 
     try:
        
@@ -48,9 +45,9 @@ def add_stop(
         )
 
         if entry.order < 1 or entry.order >= stop_count:
-            return StopBaseOut(
+            raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                message="Stops can only be added between departure and destination"
+                detail="Stops can only be added between departure and destination",
             )
 
         city = (
@@ -96,13 +93,15 @@ def add_stop(
         db.commit()
         db.refresh(stop)
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         exception_handler(e, db)
 
-        return StopBaseOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="Failed to add stop"
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add stop",
         )
 
     background_tasks.add_task(
@@ -130,9 +129,12 @@ def get_trip_stops(
 ):
     trip = db.query(Trip).filter(Trip.id == trip_id).first()
     if not trip:
-        return StopsOut(status_code=status.HTTP_404_NOT_FOUND, message="Trip not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
     if not can_view_trip(db, trip, current_user.user_id):
-        return StopsOut(status_code=status.HTTP_403_FORBIDDEN, message="You do not have permission to view this trip")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this trip",
+        )
 
     stops = db.query(Stop).filter(Stop.trip_id == trip_id).order_by(Stop.order).all()
     stops_out = [StopOut.model_validate(stop) for stop in stops]
@@ -161,10 +163,7 @@ def reorder_stops(
     )
 
     if not trip:
-        return OurBaseOut(
-            status_code=status.HTTP_404_NOT_FOUND,
-            message="Trip not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
 
     try:
         stops = (
@@ -175,41 +174,32 @@ def reorder_stops(
         )
 
         if len(stops) < 2:
-            return OurBaseOut(
+            raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                message="A trip must have at least departure and destination stops"
+                detail="A trip must have at least departure and destination stops",
             )
 
         if len(entry.stop_ids) != len(set(entry.stop_ids)):
-            return OurBaseOut(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                message="Duplicate stop ids are not allowed"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Duplicate stop ids are not allowed")
 
         existing_stop_ids = {
             stop.id for stop in stops
         }
 
         if set(entry.stop_ids) != existing_stop_ids:
-            return OurBaseOut(
+            raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                message="stop_ids must contain all stops for this trip exactly once"
+                detail="stop_ids must contain all stops for this trip exactly once",
             )
 
         departure_stop_id = stops[0].id
         destination_stop_id = stops[-1].id
 
         if entry.stop_ids[0] != departure_stop_id:
-            return OurBaseOut(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                message="Departure stop cannot be moved"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Departure stop cannot be moved")
 
         if entry.stop_ids[-1] != destination_stop_id:
-            return OurBaseOut(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                message="Destination stop cannot be moved"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Destination stop cannot be moved")
         stops_by_id = {
             stop.id: stop
             for stop in stops
@@ -229,13 +219,15 @@ def reorder_stops(
 
         db.commit()
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         exception_handler(e, db)
 
-        return OurBaseOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="Failed to reorder stops"
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reorder stops",
         )
 
     return OurBaseOut(
