@@ -17,7 +17,7 @@ class Stop(Base):
 
     trip = relationship("Trip", back_populates="stops")
     city = relationship("City")
-    posts = relationship("Post", back_populates="stop")
+    posts = relationship("Post", back_populates="stop", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("trip_id", "order", name="uq_trip_stop_order"),

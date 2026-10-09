@@ -4,7 +4,7 @@ from app import enums
 from sqlmodel import Session
 from Dbengin import get_db
 from app import models
-from app.models import Stop , Trip , City
+from app.models import Stop , Trip , City, Post
 from app.schema.city import CityData
 from app.schema.stop import StopCreate, StopBaseOut, StopsOut, StopOut
 from app.utils import oauth2
@@ -144,6 +144,55 @@ def get_trip_stops(
         status_code=status.HTTP_200_OK,
         message="Stops retrieved successfully"
     )
+
+
+@router.delete('/stops/{stop_id}', response_model=StopBaseOut, status_code=status.HTTP_200_OK)
+def delete_stop(
+    stop_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    try:
+        with db.begin():
+            stop = db.query(Stop).filter(Stop.id == stop_id).first()
+
+            if not stop:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stop not found")
+
+            if not stop.trip or stop.trip.user_id != current_user.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only the trip owner can delete this stop",
+                )
+
+            stop_trip_id = stop.trip_id
+            stop_title = stop.title
+            stop_order = stop.order
+            stop_city = stop.city
+            city_data = CityData.model_validate(stop_city) if stop_city else None
+
+            db.query(Post).filter(Post.stop_id == stop_id).delete(synchronize_session=False)
+            db.query(Stop).filter(Stop.id == stop_id).delete(synchronize_session=False)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete stop",
+        )
+
+    return StopBaseOut(
+        id=stop_id,
+        trip_id=stop_trip_id,
+        title=stop_title,
+        order=stop_order,
+        city=city_data,
+        status_code=status.HTTP_200_OK,
+        message="Stop deleted successfully",
+    )
+
 
 @router.put(
     '/trips/{trip_id}/stops/reorder',response_model=OurBaseOut,status_code=status.HTTP_200_OK)

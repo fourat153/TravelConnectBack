@@ -5,7 +5,7 @@ from app.enums import NotificationType, PrivacyEntityType , PrivacyType
 from sqlmodel import Session
 from app.utils.error_handling import exception_handler
 from Dbengin import get_db
-from app.models import User, City, Trip , PrivacySettings, Friendship , Stop
+from app.models import User, City, Trip , PrivacySettings, Friendship , Stop, Post
 from app.services.user import get_user
 from app.services.notification import NotificationError
 from app.services.notification_service import create_and_send_notification
@@ -237,26 +237,38 @@ def delete_trip(
     current_user=Depends(oauth2.get_current_user)
 ):
     try:
-        trip = db.query(Trip).filter(
-            Trip.id == trip_id,
-            Trip.user_id == current_user.user_id
-        ).first()
+        with db.begin():
+            trip = db.query(Trip).filter(
+                Trip.id == trip_id,
+                Trip.user_id == current_user.user_id
+            ).first()
 
-        if not trip:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+            if not trip:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
 
-        db.query(PrivacySettings).filter(
-            PrivacySettings.entity_type == PrivacyEntityType.trip,
-            PrivacySettings.entity_id == trip_id
-        ).delete()
+            trip_title = trip.title
+            trip_created_at = trip.created_at
 
-        db.delete(trip)
-        db.commit()
+            stop_ids = [
+                stop_id
+                for (stop_id,) in db.query(Stop.id).filter(Stop.trip_id == trip_id).all()
+            ]
+
+            if stop_ids:
+                db.query(Post).filter(Post.stop_id.in_(stop_ids)).delete(synchronize_session=False)
+
+            db.query(Stop).filter(Stop.trip_id == trip_id).delete(synchronize_session=False)
+
+            db.query(PrivacySettings).filter(
+                PrivacySettings.entity_type == PrivacyEntityType.trip,
+                PrivacySettings.entity_id == trip_id
+            ).delete(synchronize_session=False)
+
+            db.query(Trip).filter(Trip.id == trip_id).delete(synchronize_session=False)
 
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         exception_handler(e, db)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -265,8 +277,8 @@ def delete_trip(
 
     return TripBaseOut(
         id=trip_id,
-        title=trip.title,
-        created_at=trip.created_at,
+        title=trip_title,
+        created_at=trip_created_at,
         status_code=status.HTTP_200_OK,
         message="Trip deleted successfully"
     )

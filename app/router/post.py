@@ -105,7 +105,7 @@ def create_post(
                 detail="Only the trip owner can create posts",
             )
 
-        post = Post(stop_id=stop_id, title=title)
+        post = Post(stop_id=stop_id, title=title, user_id=current_user.user_id)
         db.add(post)
         db.flush()
 
@@ -149,25 +149,24 @@ def delete_post(
     current_user=Depends(oauth2.get_current_user)
 ):
     try:
-        post = db.query(Post).filter(Post.id == post_id).first()
-        if not post:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Post not found",
-            )
-        if not post.stop or not post.stop.trip or post.stop.trip.user_id != current_user.user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the trip owner can delete posts",
-            )
+        with db.begin():
+            post = db.query(Post).filter(Post.id == post_id).first()
+            if not post:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Post not found",
+                )
+            if post.user_id != current_user.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only the post author can delete this post",
+                )
 
-        db.delete(post)
-        db.commit()
+            db.delete(post)
 
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         exception_handler(e, db)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -654,7 +653,7 @@ def create_feed_post(
         db.add(stop)
         db.flush()
 
-        post = Post(stop_id=stop.id, title=title)
+        post = Post(stop_id=stop.id, title=title, user_id=current_user.user_id)
         db.add(post)
         db.flush()
 
