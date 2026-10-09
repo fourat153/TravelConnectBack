@@ -7,6 +7,7 @@ from ..database import get_db
 from app.utils import oauth2
 from app import models
 from app.schema.friendships import FriendsData, FriendsOut
+from app.schema.our_base_model import OurBaseOut
 from app.services.suggestions import get_friend_suggestions
 from app.schema.suggestions import SuggestionsOut, SuggestionUser
 from app.schema.map_search import MapSearchFriend, MapSearchOut
@@ -85,6 +86,8 @@ def get_my_friends(
             for user in results
         ]
 
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -206,6 +209,40 @@ def search_users(
     ]
 
 
-@router.delete("/Friends/me", response_model=FriendsOut, status_code=status.HTTP_200_OK)
-def delet () : 
-    pass
+@router.delete("/Friends/{friend_id}", response_model=OurBaseOut, status_code=status.HTTP_200_OK)
+def delete_friend(
+    friend_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+):
+    try:
+        friendship = db.query(models.Friendship).filter(
+            or_(
+                (models.Friendship.user_1_id == current_user.user_id)
+                & (models.Friendship.user_2_id == friend_id),
+                (models.Friendship.user_1_id == friend_id)
+                & (models.Friendship.user_2_id == current_user.user_id),
+            )
+        ).first()
+
+        if not friendship:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Friendship not found.",
+            )
+
+        db.delete(friendship)
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove friend",
+        )
+
+    return OurBaseOut(
+        status_code=status.HTTP_200_OK,
+        message="Friend removed successfully.",
+    )

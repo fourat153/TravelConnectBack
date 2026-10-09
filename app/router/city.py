@@ -39,6 +39,8 @@ def create_city(
         db.commit()
         db.refresh(new_city)
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         exception_handler(e, db)

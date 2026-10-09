@@ -1,3 +1,6 @@
+import logging
+
+import firebase_admin
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -5,6 +8,8 @@ from app.enums import NotificationType
 from app.models.device_token import DeviceToken
 from app.models.notification import Notification
 from app.services.notification import NotificationError, send_notification
+
+logger = logging.getLogger(__name__)
 
 
 def create_and_send_notification(
@@ -28,6 +33,13 @@ def create_and_send_notification(
     db.add(notification)
     db.commit()
     db.refresh(notification)
+
+    if not firebase_admin._apps:
+        logger.warning(
+            "Firebase is not configured; skipping push notification for user %s.",
+            recipient_id,
+        )
+        return {"notification": notification, "message_ids": []}
 
     device_tokens = db.scalars(
         select(DeviceToken.token).where(DeviceToken.user_id == recipient_id)

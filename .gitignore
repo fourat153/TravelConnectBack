@@ -9,4 +9,5 @@ alembic/versions/__pycache__/
 *.dump
 *.sql.bak
 .vscode/
+*firebase-adminsdk*.json
 app/config/travelconnect-caf0c-firebase-adminsdk-fbsvc-c0137b9f87.json

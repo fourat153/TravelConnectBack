@@ -14,8 +14,13 @@ from datetime import datetime
 from app.utils import oauth2
 from fastapi.security import OAuth2PasswordRequestForm
 from app.utils import general_util
+from app.config import settings
 from fastapi import Response
 router = APIRouter()
+
+
+def _use_secure_cookies() -> bool:
+    return settings.environment.strip().lower() in {"production", "prod"}
 
 
 @router.patch('/confirmAccount', response_model= ConfirmAccountOut)
@@ -23,11 +28,11 @@ def confirm_account(entry: ConfirmAccount, db: Session = Depends(get_db)):
     confirmation_code = db.query(models.ConfirmationCode).filter(models.ConfirmationCode.code == entry.confirmation_code).first() 
     if not confirmation_code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid confirmation code")
-    '''if confirmation_code.expires_at < datetime.now():
-        return ConfirmAccountOut(
-            message="Confirmation code has expired",
+    if confirmation_code.expires_at is not None and confirmation_code.expires_at < datetime.utcnow():
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-        )'''
+            detail="Confirmation code has expired",
+        )
     if confirmation_code.status != enums.CodeStatus.pending:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -80,8 +85,8 @@ def login_user(user_credentials: OAuth2PasswordRequestForm = Depends(), db: Sess
     response.set_cookie(
         key="access_token",
         value=access_token,
-        httponly=False,
-        secure=False,
+        httponly=True,
+        secure=_use_secure_cookies(),
         samesite="strict",
         max_age=10000 * 60,
         path="/"
@@ -97,8 +102,8 @@ def login_user(user_credentials: OAuth2PasswordRequestForm = Depends(), db: Sess
 def logout_user(current_user: TokenData = Depends(oauth2.get_current_user), response: Response  = None):
     response.delete_cookie(
         key="access_token",
-        httponly=False,
-        secure=False,
+        httponly=True,
+        secure=_use_secure_cookies(),
         samesite="strict",
         path="/"
     )

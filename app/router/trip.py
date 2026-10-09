@@ -158,6 +158,19 @@ def get_friend_first_stop(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
+    is_friend = db.query(Friendship).filter(
+        (
+            (Friendship.user_1_id == current_user.user_id) & (Friendship.user_2_id == friend_id)
+        ) | (
+            (Friendship.user_2_id == current_user.user_id) & (Friendship.user_1_id == friend_id)
+        )
+    ).first()
+    if not is_friend:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not friends with this user.",
+        )
+
     first_trip = (
         db.query(Trip)
         .filter(Trip.user_id == friend_id)

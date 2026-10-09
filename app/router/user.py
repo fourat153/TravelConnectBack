@@ -1,4 +1,5 @@
-import uuid
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status, File, Form, UploadFile
 from fastapi.params import Depends
@@ -32,9 +33,9 @@ async def sendConfirmationMail(email:str, user_id:int, db : Session):
     confirmation_code = ConfirmationCodeCreate(
         user_id=user_id,
         email=email,
-        code=str(uuid.uuid1()),
+        code=secrets.token_urlsafe(32),
         status= enums.CodeStatus.pending,
-        expires_at="2024-12-31 23:59:59"
+        expires_at=datetime.utcnow() + timedelta(hours=24)
     )
     add_confirmation_code(confirmation_code, db)
     subject = "Account Confirmation"
@@ -209,6 +210,8 @@ def update_user_profile(
             status_code=status.HTTP_200_OK,
             message="Profile updated successfully"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         exception_handler(e, db)

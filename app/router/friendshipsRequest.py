@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -16,6 +18,7 @@ from app.services.notification_service import create_and_send_notification
 from app.utils import oauth2
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _status(db: Session, name: FriendshipStatusEnum) -> models.FriendshipStatus:
@@ -110,7 +113,9 @@ def send_friend_request(
             sender_id=sender.id,
         )
     except NotificationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        logger.error("Failed to send friend request notification: %s", exc.detail)
+    except Exception:
+        logger.exception("Failed to send friend request notification")
 
     return _request_response(friend_request)
 
@@ -169,7 +174,9 @@ def accept_friend_request(
             sender_id=recipient.id,
         )
     except NotificationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        logger.error("Failed to send friend request accepted notification: %s", exc.detail)
+    except Exception:
+        logger.exception("Failed to send friend request accepted notification")
 
     return _request_response(friend_request)
 

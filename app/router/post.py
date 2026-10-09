@@ -188,9 +188,9 @@ def get_post_comments(
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
     if not post.stop or not can_view_trip(db, post.stop.trip, current_user.user_id):
-        return CommentsOut(
+        raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            message="You do not have permission to view this trip",
+            detail="You do not have permission to view this trip",
         )
 
     comments = (
@@ -284,6 +284,8 @@ def create_post_comment(
         except Exception as e:
             logger.error(f"Failed to send comment notification: {str(e)}", exc_info=True)
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         exception_handler(e, db)
