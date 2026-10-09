@@ -261,7 +261,6 @@ def reorder_stops(
 
         db.flush()
 
-        # Apply final order
         for index, stop_id in enumerate(entry.stop_ids):
             stop = stops_by_id[stop_id]
             stop.order = index

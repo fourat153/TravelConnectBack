@@ -169,7 +169,6 @@ def update_user_profile(
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-        # Check if email is already taken by another user
         if email != user.email:
             existing = db.query(models.User).filter(models.User.email == email).first()
             if existing:
@@ -181,7 +180,6 @@ def update_user_profile(
         user.gender = gender
         user.phone_number = phone_number
 
-        # Update city if coordinates are provided
         if city_lat is not None and city_lon is not None:
             city = db.query(models.City).filter(models.City.lat == city_lat, models.City.long == city_lon).first()
             if not city:
@@ -190,7 +188,6 @@ def update_user_profile(
                 db.flush()
             user.city_id = city.id
 
-        # Upload profile picture to Cloudinary if provided
         if profile_picture and profile_picture.filename:
             url = upload_image(profile_picture.file.read(), folder="profiles")
             user.profile_picture = url
