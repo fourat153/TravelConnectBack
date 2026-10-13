@@ -87,7 +87,7 @@ def get_stop_posts(
     )
 
 @router.post('/stops/{stop_id}/posts', response_model=SinglePostOut, status_code=status.HTTP_201_CREATED)
-def create_post(
+async def create_post(
     stop_id: int,
     title: Annotated[str, Form()],
     images: List[UploadFile] = File(default=[]),
@@ -112,14 +112,14 @@ def create_post(
         for file in images:
             if not file.filename:
                 continue
-            url = upload_image(file.file.read())
+            url = upload_image(await file.read())
             img = Image(post_id=post.id, link=url)
             db.add(img)
 
         for file in videos:
             if not file.filename:
                 continue
-            url = upload_video(file.file.read())
+            url = upload_video(await file.read())
             vid = Video(post_id=post.id, link=url)
             db.add(vid)
 
@@ -611,7 +611,7 @@ def get_user_posts(
     return user_posts
 
 @router.post('/posts/feed', response_model=SinglePostOut, status_code=status.HTTP_201_CREATED)
-def create_feed_post(
+async def create_feed_post(
     title: Annotated[str, Form()],
     location: Annotated[str, Form()],
     lat: Annotated[float, Form()] = 0.0,
@@ -662,14 +662,14 @@ def create_feed_post(
         for file in images:
             if not file.filename:
                 continue
-            url = upload_image(file.file.read())
+            url = upload_image(await file.read())
             img = Image(post_id=post.id, link=url)
             db.add(img)
 
         for file in videos:
             if not file.filename:
                 continue
-            url = upload_video(file.file.read())
+            url = upload_video(await file.read())
             vid = Video(post_id=post.id, link=url)
             db.add(vid)
 

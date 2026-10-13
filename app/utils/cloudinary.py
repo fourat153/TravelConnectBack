@@ -1,3 +1,5 @@
+from io import BytesIO
+
 import cloudinary
 import cloudinary.uploader
 from app.config import settings
@@ -14,5 +16,9 @@ def upload_image(file_bytes: bytes, folder: str = "posts") -> str:
 
 
 def upload_video(file_bytes: bytes, folder: str = "posts") -> str:
-    result = cloudinary.uploader.upload_large(file_bytes, folder=folder, resource_type="video")
+    result = cloudinary.uploader.upload_large(
+        BytesIO(file_bytes),
+        folder=folder,
+        resource_type="video",
+    )
     return result["secure_url"]

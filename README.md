@@ -89,6 +89,47 @@ API will be available at `http://localhost:8000`
 
 Interactive docs at `http://localhost:8000/docs`
 
+### Seed local demo data
+
+After applying migrations, run the repeatable demo seeder from the repository
+root:
+
+```bash
+python -m scripts.seed
+```
+
+The command uses the same `database_*` environment variables as the
+application. It creates demo users, cities, public trips and ordered stops,
+posts, friendships, likes, comments, and notifications. Existing records are
+never deleted or reset, and matching demo records are skipped on later runs.
+
+For local development, the demo accounts all use the password
+`TravelConnectDemo123!`:
+
+- `alice.demo@travelconnect.local`
+- `ben.demo@travelconnect.local`
+- `claire.demo@travelconnect.local`
+- `diego.demo@travelconnect.local`
+- `emma.demo@travelconnect.local`
+- `finn.demo@travelconnect.local`
+- `grace.demo@travelconnect.local`
+
+The seeder creates one stable public image row for every demo post, so posts
+display media immediately through the normal API without requiring a
+Cloudinary upload. New media can still be added through the existing upload
+endpoints when Cloudinary credentials are configured.
+
+Every demo user also likes and comments on each post owned by another demo
+user. Self-likes and self-comments are intentionally excluded.
+
+Emma, Finn, and Grace are profile-only demo users. They are intentionally not
+connected by friendships to the existing user with ID `26`, or to the other
+seeded users.
+
+Each demo user is also connected through a friendship to the existing account
+`ahmedli@yopmail.com` (database user ID `26`). The seeder stops with an explicit
+error if that email and ID do not identify the same account.
+
 ---
 
 ## Contributing
