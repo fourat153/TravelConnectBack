@@ -1,6 +1,6 @@
 from typing import Optional
 
-from app.schema.our_base_model import OurBaseModel
+from app.schema.our_base_model import OurBaseModel, PaginatedResponse
 
 
 class MapSearchFriend(OurBaseModel):
@@ -22,6 +22,6 @@ class MapSearchStop(OurBaseModel):
     city: MapSearchCity
 
 
-class MapSearchOut(OurBaseModel):
+class MapSearchOut(PaginatedResponse):
     friends: list[MapSearchFriend]
     stops: list[MapSearchStop]

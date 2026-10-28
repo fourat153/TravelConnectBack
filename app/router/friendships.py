@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import case, exists, or_
 from starlette import status
-from math import ceil
 from ..database import get_db
 from app.utils import oauth2
 from app import models
@@ -12,7 +11,9 @@ from app.services.suggestions import get_friend_suggestions
 from app.schema.suggestions import SuggestionsOut, SuggestionUser
 from app.schema.map_search import MapSearchFriend, MapSearchOut
 from app.schema.user_search import UserSearchResult
+from app.schema.pagination import UserSearchOut
 from app.enums import FriendshipStatusEnum
+from app.utils.pagination import div_ceil
 
 router = APIRouter()
 
@@ -20,12 +21,21 @@ router = APIRouter()
 @router.get("/Friends/search", response_model=MapSearchOut, status_code=status.HTTP_200_OK)
 def search_friends(
     q: str | None = None,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
     query = (q or "").strip()
     if not query:
-        return MapSearchOut(friends=[], stops=[])
+        return MapSearchOut(
+            friends=[],
+            stops=[],
+            page_number=page_number,
+            page_size=page_size,
+            total_pages=0,
+            total_records=0,
+        )
 
     friend_user = aliased(models.User)
     friendship = models.Friendship
@@ -33,12 +43,14 @@ def search_friends(
         (friendship.user_1_id == current_user.user_id) & (friendship.user_2_id == friend_user.id),
         (friendship.user_2_id == current_user.user_id) & (friendship.user_1_id == friend_user.id),
     )
-    matching_friends = db.query(friend_user).join(friendship, friend_filter).filter(
+    query = db.query(friend_user).join(friendship, friend_filter).filter(
         or_(
             friend_user.firstname.ilike(f"%{query}%"),
             friend_user.lastname.ilike(f"%{query}%"),
         )
-    ).distinct().all()
+    ).distinct()
+    total_records = query.count()
+    matching_friends = query.offset((page_number - 1) * page_size).limit(page_size).all()
 
     friends = [
         MapSearchFriend(
@@ -48,18 +60,23 @@ def search_friends(
         )
         for user in matching_friends
     ]
-    return MapSearchOut(friends=friends, stops=[])
+    return MapSearchOut(
+        friends=friends,
+        stops=[],
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
+    )
 
 
 @router.get("/Friends/me", response_model=FriendsOut, status_code=status.HTTP_200_OK)
 def get_my_friends(
     db: Session = Depends(get_db),
     current_user = Depends(oauth2.get_current_user),
-    page_number: int = 1,
-    page_size: int = 10,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
 ):
-    offset = (page_number - 1) * page_size
-
     try:
         query = db.query(models.User).join(
             models.Friendship,
@@ -71,7 +88,7 @@ def get_my_friends(
         )
 
         total_records   = query.count()
-        total_pages = ceil(total_records / page_size)
+        total_pages = div_ceil(total_records, page_size)
         results = query.limit(page_size).offset((page_number - 1) * page_size).all()
 
         if not results:
@@ -130,23 +147,31 @@ def friend_suggestions(
     return SuggestionsOut(
         status_code=status.HTTP_200_OK,
         message="Suggestions retrieved successfully",
-        data=data
+        data=data,
     )
 
 
 @router.get(
     "/users/search",
-    response_model=list[UserSearchResult],
+    response_model=UserSearchOut,
     status_code=status.HTTP_200_OK,
 )
 def search_users(
     query: str,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
     search_term = query.strip()
     if not search_term:
-        return []
+        return UserSearchOut(
+            users=[],
+            page_number=page_number,
+            page_size=page_size,
+            total_pages=0,
+            total_records=0,
+        )
 
     user = models.User
     friendship = models.Friendship
@@ -181,7 +206,7 @@ def search_users(
         else_="none",
     ).label("relationship_status")
 
-    rows = db.query(
+    rows_query = db.query(
         user.id,
         (user.firstname + " " + user.lastname).label("name"),
         user.profile_picture.label("avatar_url"),
@@ -196,17 +221,25 @@ def search_users(
             ),
             (user.firstname + user.lastname).ilike(f"%{search_term}%"),
         ),
-    ).order_by(user.firstname, user.lastname, user.id).all()
+    ).order_by(user.firstname, user.lastname, user.id)
+    total_records = rows_query.count()
+    rows = rows_query.offset((page_number - 1) * page_size).limit(page_size).all()
 
-    return [
-        UserSearchResult(
-            id=row.id,
-            name=row.name,
-            avatar_url=row.avatar_url,
-            relationship_status=row.relationship_status,
-        )
-        for row in rows
-    ]
+    return UserSearchOut(
+        users=[
+            UserSearchResult(
+                id=row.id,
+                name=row.name,
+                avatar_url=row.avatar_url,
+                relationship_status=row.relationship_status,
+            )
+            for row in rows
+        ],
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
+    )
 
 
 @router.delete("/Friends/{friend_id}", response_model=OurBaseOut, status_code=status.HTTP_200_OK)

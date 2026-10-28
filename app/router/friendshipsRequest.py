@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,8 @@ from app.schema.friendshipsRequest import (
     IncomingFriendshipRequestOut,
     RelationshipStatusOut,
 )
+from app.schema.pagination import IncomingFriendshipRequestsOut
+from app.utils.pagination import div_ceil
 from app.services.notification import NotificationError
 from app.services.notification_service import create_and_send_notification
 from app.utils import oauth2
@@ -206,18 +208,23 @@ def decline_friend_request(
 
 @router.get(
     "/friend-requests/incoming",
-    response_model=list[IncomingFriendshipRequestOut],
+    response_model=IncomingFriendshipRequestsOut,
 )
 def get_incoming_friend_requests(
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
     pending_status = _status(db, FriendshipStatusEnum.pending)
-    requests = db.query(models.FriendshipRequest).filter(
+    requests_query = db.query(models.FriendshipRequest).filter(
         models.FriendshipRequest.receiver_id == current_user.user_id,
         models.FriendshipRequest.status_id == pending_status.id,
-    ).all()
-    return [
+    )
+    total_records = requests_query.count()
+    requests = requests_query.offset((page_number - 1) * page_size).limit(page_size).all()
+    return IncomingFriendshipRequestsOut(
+        requests=[
         IncomingFriendshipRequestOut(
             id=request.id,
             sender_id=request.sender_id,
@@ -227,7 +234,12 @@ def get_incoming_friend_requests(
             sender_avatar=request.sender.profile_picture,
         )
         for request in requests
-    ]
+        ],
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
+    )
 
 
 @router.get(

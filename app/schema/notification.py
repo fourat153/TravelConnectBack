@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from app.enums import NotificationType
-from app.schema.our_base_model import OurBaseModel
+from app.schema.our_base_model import OurBaseModel, PaginatedResponse
 
 
 class NotificationOut(OurBaseModel):
@@ -14,3 +14,7 @@ class NotificationOut(OurBaseModel):
     is_read: bool
     read_at: datetime | None = None
     created_at: datetime
+
+
+class NotificationsOut(PaginatedResponse):
+    notifications: list[NotificationOut] = []

@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Annotated, List
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session, joinedload, selectinload
 from Dbengin import get_db
 from app.enums.privacy_entity_type import PrivacyEntityType
@@ -19,13 +19,14 @@ from app.models.trip import Trip
 from app.models.user import User
 from app.models.video import Video
 from app.schema.post_interactions import CommentCreate, CommentData, CommentsOut, LikeData, SingleCommentOut, SingleLikeOut
-from app.schema.post import FeedPostOut, PostOut, PostsOut, SinglePostOut
+from app.schema.post import FeedPostOut, FeedPostsOut, PostOut, PostsOut, SinglePostOut
 from app.services.notification_service import create_and_send_notification
 from app.services.notification import NotificationError
 from app.utils import oauth2
 from app.utils.cloudinary import upload_image, upload_video
 from app.utils.error_handling import exception_handler
 from app.services.trip_privacy import can_view_trip
+from app.utils.pagination import div_ceil
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -54,6 +55,8 @@ def get_relative_time(dt: datetime) -> str:
 @router.get('/stops/{stop_id}/posts', response_model=PostsOut, status_code=status.HTTP_200_OK)
 def get_stop_posts(
     stop_id: int,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -66,7 +69,7 @@ def get_stop_posts(
             detail="You do not have permission to view this trip",
         )
 
-    posts = (
+    posts_query = (
         db.query(Post)
         .options(
             selectinload(Post.images),
@@ -74,8 +77,9 @@ def get_stop_posts(
             selectinload(Post.likes),
         )
         .filter(Post.stop_id == stop_id)
-        .all()
     )
+    total_records = posts_query.count()
+    posts = posts_query.offset((page_number - 1) * page_size).limit(page_size).all()
     for p in posts:
         p.likes_count = len(p.likes)
         p.has_liked = any(like.user_id == current_user.user_id for like in p.likes)
@@ -83,6 +87,10 @@ def get_stop_posts(
     return PostsOut(
         status_code=status.HTTP_200_OK,
         message="Posts retrieved successfully",
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
         posts=[PostOut.model_validate(p) for p in posts]
     )
 
@@ -181,6 +189,8 @@ def delete_post(
 @router.get('/posts/{post_id}/comments', response_model=CommentsOut, status_code=status.HTTP_200_OK)
 def get_post_comments(
     post_id: int,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -193,20 +203,25 @@ def get_post_comments(
             detail="You do not have permission to view this trip",
         )
 
-    comments = (
+    comments_query = (
         db.query(Comment)
         .options(joinedload(Comment.user))
         .filter(Comment.post_id == post_id)
         .order_by(Comment.created_at.desc())
-        .all()
     )
+    total_records = comments_query.count()
+    comments = comments_query.offset((page_number - 1) * page_size).limit(page_size).all()
     for comment in comments:
         comment.username = f"{comment.user.firstname} {comment.user.lastname}" if comment.user else "Traveler"
 
     return CommentsOut(
         status_code=status.HTTP_200_OK,
         message="Comments retrieved successfully",
-        data=[CommentData.model_validate(comment) for comment in comments]
+        data=[CommentData.model_validate(comment) for comment in comments],
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
     )
 
 @router.post('/posts/{post_id}/comments', response_model=SingleCommentOut, status_code=status.HTTP_201_CREATED)
@@ -391,8 +406,10 @@ def unlike_post(
         message="Post unliked successfully",
     )
 
-@router.get('/posts/feed', response_model=List[FeedPostOut], status_code=status.HTTP_200_OK)
+@router.get('/posts/feed', response_model=FeedPostsOut, status_code=status.HTTP_200_OK)
 def get_feed_posts(
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -470,7 +487,15 @@ def get_feed_posts(
             long=stop.city.long if stop.city else None
         ))
 
-    return feed_posts
+    total_records = len(feed_posts)
+    page_start = (page_number - 1) * page_size
+    return FeedPostsOut(
+        posts=feed_posts[page_start:page_start + page_size],
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
+    )
 
 @router.get('/posts/{post_id}', response_model=FeedPostOut, status_code=status.HTTP_200_OK)
 def get_post_by_id(
@@ -537,9 +562,11 @@ def get_post_by_id(
         long=stop.city.long if stop.city else None,
     )
 
-@router.get('/posts/user/{user_id}', response_model=List[FeedPostOut], status_code=status.HTTP_200_OK)
+@router.get('/posts/user/{user_id}', response_model=FeedPostsOut, status_code=status.HTTP_200_OK)
 def get_user_posts(
     user_id: int,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -608,7 +635,15 @@ def get_user_posts(
             long=stop.city.long if stop.city else None
         ))
 
-    return user_posts
+    total_records = len(user_posts)
+    page_start = (page_number - 1) * page_size
+    return FeedPostsOut(
+        posts=user_posts[page_start:page_start + page_size],
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
+    )
 
 @router.post('/posts/feed', response_model=SinglePostOut, status_code=status.HTTP_201_CREATED)
 async def create_feed_post(

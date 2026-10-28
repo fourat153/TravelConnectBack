@@ -89,6 +89,13 @@ API will be available at `http://localhost:8000`
 
 Interactive docs at `http://localhost:8000/docs`
 
+### Paginated list endpoints
+
+List endpoints accept `page_number` and `page_size` query parameters. Paginated
+responses include the result collection together with `page_number`,
+`page_size`, `total_pages`, and `total_records`. The default page size is 10
+and the maximum page size is 100.
+
 ### Seed local demo data
 
 After applying migrations, run the repeatable demo seeder from the repository

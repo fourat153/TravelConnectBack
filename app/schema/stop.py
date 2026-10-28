@@ -1,5 +1,5 @@
 from typing import Optional, List
-from app.schema.our_base_model import OurBaseModel, OurBaseOut
+from app.schema.our_base_model import OurBaseModel, OurBaseOut, PaginatedResponse
 from app.schema.city import CityData
 
 class StopCreate(OurBaseModel):
@@ -24,7 +24,7 @@ class StopBaseOut(OurBaseOut):
     city: Optional[CityData] = None
     order: Optional[int] = None
 
-class StopsOut(OurBaseOut):
+class StopsOut(PaginatedResponse):
     stops: Optional[List[StopOut]] = None
 
 class StopInput(OurBaseModel):

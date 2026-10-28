@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from fastapi.params import Depends
 from app import enums
 from sqlmodel import Session
@@ -11,6 +11,7 @@ from app.utils import oauth2
 from app.utils.error_handling import exception_handler
 from app.services.affinity import increment_city_affinity
 from app.services.trip_privacy import can_view_trip
+from app.utils.pagination import div_ceil
 from app.schema.stop import StopReorder
 from app.schema.our_base_model import OurBaseOut
 
@@ -124,6 +125,8 @@ def add_stop(
 @router.get('/trips/{trip_id}/stops', response_model=StopsOut, status_code=status.HTTP_200_OK)
 def get_trip_stops(
     trip_id: int,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
@@ -136,13 +139,19 @@ def get_trip_stops(
             detail="You do not have permission to view this trip",
         )
 
-    stops = db.query(Stop).filter(Stop.trip_id == trip_id).order_by(Stop.order).all()
+    stops_query = db.query(Stop).filter(Stop.trip_id == trip_id).order_by(Stop.order)
+    total_records = stops_query.count()
+    stops = stops_query.offset((page_number - 1) * page_size).limit(page_size).all()
     stops_out = [StopOut.model_validate(stop) for stop in stops]
 
     return StopsOut(
         stops=stops_out,
         status_code=status.HTTP_200_OK,
-        message="Stops retrieved successfully"
+        message="Stops retrieved successfully",
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
     )
 
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from app.schema.our_base_model import OurBaseModel, OurBaseOut
+from app.schema.our_base_model import OurBaseModel, OurBaseOut, PaginatedResponse
 
 
 class CommentCreate(OurBaseModel):
@@ -19,7 +19,7 @@ class CommentData(OurBaseModel):
     username: Optional[str] = "Traveler"
 
 
-class CommentsOut(OurBaseOut):
+class CommentsOut(PaginatedResponse):
     data: list[CommentData] = []
 
 

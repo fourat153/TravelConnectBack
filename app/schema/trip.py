@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import model_validator
 from app.enums import PrivacyType
 from app.schema.city import CityInput, CityData
-from app.schema.our_base_model import OurBaseModel, OurBaseOut
+from app.schema.our_base_model import OurBaseModel, OurBaseOut, PaginatedResponse
 from app.schema.stop import StopInput
 
 class TripCreate(OurBaseModel):
@@ -26,5 +26,5 @@ class TripBaseOut(OurBaseOut):
     created_at: Optional[datetime] = None
  
  
-class TripsOut(OurBaseOut):
+class TripsOut(PaginatedResponse):
     trips: list[TripBaseOut] = []

@@ -1,7 +1,7 @@
 from datetime import datetime
 from pydantic import Field
 
-from app.schema.our_base_model import OurBaseModel, OurBaseOut
+from app.schema.our_base_model import OurBaseModel, OurBaseOut, PaginatedResponse
 
 
 class ImageOut(OurBaseModel):
@@ -31,7 +31,7 @@ class PostOut(OurBaseOut):
     has_liked: bool = False
 
 
-class PostsOut(OurBaseOut):
+class PostsOut(PaginatedResponse):
     posts: list[PostOut] = Field(default_factory=list)
 
 
@@ -57,3 +57,7 @@ class FeedPostOut(OurBaseModel):
     has_liked: bool = Field(default=False, alias="hasLiked")
     comments: list[dict] = Field(default_factory=list)
     created_at: str = Field(alias="createdAt")
+
+
+class FeedPostsOut(PaginatedResponse):
+    posts: list[FeedPostOut] = Field(default_factory=list)

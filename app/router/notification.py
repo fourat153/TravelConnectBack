@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from Dbengin import get_db
@@ -10,24 +10,41 @@ from app.models.device_token import DeviceToken
 from app.models.notification import Notification
 from app.schema.auth import TokenData
 from app.schema.devicetoken import DeviceTokenCreate, DeviceTokenOut
-from app.schema.notification import NotificationOut
+from app.schema.notification import NotificationOut, NotificationsOut
 from app.services.notification import NotificationError
 from app.services.notification_service import create_and_send_notification
 from app.utils.oauth2 import get_current_user
+from app.utils.pagination import div_ceil
 
 router = APIRouter(prefix="/notifications")
 
 
-@router.get("", response_model=list[NotificationOut])
+@router.get("", response_model=NotificationsOut)
 def get_notifications(
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return db.scalars(
-        select(Notification)
-        .where(Notification.recipient_id == current_user.user_id)
+    notifications_query = select(Notification).where(
+        Notification.recipient_id == current_user.user_id
+    )
+    total_records = db.scalar(
+        select(func.count()).select_from(notifications_query.subquery())
+    ) or 0
+    notifications = db.scalars(
+        notifications_query
         .order_by(Notification.created_at.desc(), Notification.id.desc())
+        .offset((page_number - 1) * page_size)
+        .limit(page_size)
     ).all()
+    return NotificationsOut(
+        notifications=notifications,
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
+    )
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationOut)

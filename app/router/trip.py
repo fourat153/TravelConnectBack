@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, HTTPException , status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.params import Depends
 from app.enums import NotificationType, PrivacyEntityType , PrivacyType
 from sqlmodel import Session
@@ -13,6 +13,7 @@ from app.services.trip_privacy import can_view_trip
 from app.schema.trip import TripCreate, TripBaseOut , TripsOut
 from app.schema.friendships import FriendFirstStop
 from app.utils import oauth2
+from app.utils.pagination import div_ceil
 router = APIRouter()
 logger = logging.getLogger(__name__)
 """
@@ -136,20 +137,35 @@ def create_trip(
 
 
 @router.get('/trips/me', response_model=TripsOut, status_code=status.HTTP_200_OK)
-def get_my_trips(db: Session = Depends(get_db), current_user=Depends(oauth2.get_current_user)):
-    trips = db.query(Trip).filter(Trip.user_id == current_user.user_id).all()
+def get_my_trips(
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+):
+    trips_query = db.query(Trip).filter(Trip.user_id == current_user.user_id)
+    total_records = trips_query.count()
+    trips = trips_query.offset((page_number - 1) * page_size).limit(page_size).all()
     if not trips:
         return TripsOut(
             trips=[],
             status_code=status.HTTP_200_OK,
             message="No trips found",
+            page_number=page_number,
+            page_size=page_size,
+            total_pages=div_ceil(total_records, page_size),
+            total_records=total_records,
         )
 
     my_trips = [TripBaseOut.model_validate(trip) for trip in trips]
     return TripsOut(
         trips=my_trips,
         status_code=status.HTTP_200_OK,
-        message="Trips retrieved successfully"
+        message="Trips retrieved successfully",
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
     )
 
 @router.get('/trips/friend/{friend_id}/first-stop', response_model=FriendFirstStop, status_code=status.HTTP_200_OK)
@@ -203,6 +219,8 @@ def get_friend_first_stop(
 @router.get('/trips/friend/{user_id}', response_model=TripsOut, status_code=status.HTTP_200_OK)
 def get_user_trips(
     user_id: int,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
@@ -223,23 +241,34 @@ def get_user_trips(
     trips = db.query(Trip).filter(
         Trip.user_id == user_id,
     ).all()
+    visible_trips = [
+        trip for trip in trips
+        if can_view_trip(db, trip, current_user.user_id)
+    ]
+    total_records = len(visible_trips)
+    visible_trips = visible_trips[
+        (page_number - 1) * page_size:page_number * page_size
+    ]
 
     if not trips:
         return TripsOut(
             status_code=status.HTTP_200_OK,
             message="No public trips found.",
-            trips=[]
+            trips=[],
+            page_number=page_number,
+            page_size=page_size,
+            total_pages=div_ceil(total_records, page_size),
+            total_records=total_records,
         )
-
-    visible_trips = [
-        trip for trip in trips
-        if can_view_trip(db, trip, current_user.user_id)
-    ]
 
     return TripsOut(
         trips=[TripBaseOut.model_validate(trip) for trip in visible_trips],
         status_code=status.HTTP_200_OK,
-        message="Trips retrieved successfully"
+        message="Trips retrieved successfully",
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
     )
 
 

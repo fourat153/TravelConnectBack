@@ -1,12 +1,12 @@
 from typing import Optional
-from app.schema.our_base_model import OurBaseModel, OurBaseOut
+from app.schema.our_base_model import OurBaseModel, PaginatedResponse
 
 class FriendsData(OurBaseModel):
     friend_id: int
     username: str
     profile_picture: Optional[str] = None
 
-class FriendsOut(OurBaseOut):
+class FriendsOut(PaginatedResponse):
     data: list[FriendsData]
     total_pages : int
     total_records : int
