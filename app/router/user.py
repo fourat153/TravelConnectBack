@@ -1,6 +1,7 @@
-import uuid
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, status, File, Form, UploadFile
+from fastapi import APIRouter, HTTPException, status, File, Form, UploadFile
 from fastapi.params import Depends
 from .. import enums
 from sqlmodel import Session
@@ -32,9 +33,9 @@ async def sendConfirmationMail(email:str, user_id:int, db : Session):
     confirmation_code = ConfirmationCodeCreate(
         user_id=user_id,
         email=email,
-        code=str(uuid.uuid1()),
+        code=secrets.token_urlsafe(32),
         status= enums.CodeStatus.pending,
-        expires_at="2024-12-31 23:59:59"
+        expires_at=datetime.utcnow() + timedelta(hours=24)
     )
     add_confirmation_code(confirmation_code, db)
     subject = "Account Confirmation"
@@ -48,14 +49,14 @@ async def create_user(entry: UserCreate, db: Session = Depends(get_db)):
     user_in_db = db.query(models.User).filter(models.User.email == entry.email).first()
     if user_in_db:
       if user_in_db:
-        return UserOut(
-            message="User with this email already exists",
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email already exists",
         )
     if entry.password != entry.confirm_password:
-        return UserOut(
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            message="Passwords must match!"
+            detail="Passwords must match!",
         )
 
     try:
@@ -68,12 +69,14 @@ async def create_user(entry: UserCreate, db: Session = Depends(get_db)):
        await sendConfirmationMail(user.email, user.id, db)
        db.commit()
        db.refresh(user)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return UserOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user",
         )
 
     return UserOut(**user.__dict__,
@@ -115,12 +118,14 @@ def complete_onboarding(
         db.flush()
         db.commit()
         db.refresh(user)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return OnboardingOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to complete onboarding",
         )
     return OnboardingOut(
         has_completed_onboarding=Onboarding.Onboarded,
@@ -135,10 +140,10 @@ def get_current_user_city(
 ):
     user = db.query(models.User).filter(models.User.id == current_user.user_id).first()
     if not user or not user.city_id:
-        return CityOut(status_code=status.HTTP_404_NOT_FOUND, message="City not found for user")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="City not found for user")
     city = db.query(models.City).filter(models.City.id == user.city_id).first()
     if not city:
-        return CityOut(status_code=status.HTTP_404_NOT_FOUND, message="City not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="City not found")
     return CityOut(
         status_code=status.HTTP_200_OK,
         message="City retrieved successfully",
@@ -162,13 +167,12 @@ def update_user_profile(
     try:
         user = db.query(models.User).filter(models.User.id == current_user.user_id).first()
         if not user:
-            return UserOut(status_code=status.HTTP_404_NOT_FOUND, message="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-        # Check if email is already taken by another user
         if email != user.email:
             existing = db.query(models.User).filter(models.User.email == email).first()
             if existing:
-                return UserOut(status_code=status.HTTP_400_BAD_REQUEST, message="Email already in use")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
             user.email = email
 
         user.firstname = firstname
@@ -176,7 +180,6 @@ def update_user_profile(
         user.gender = gender
         user.phone_number = phone_number
 
-        # Update city if coordinates are provided
         if city_lat is not None and city_lon is not None:
             city = db.query(models.City).filter(models.City.lat == city_lat, models.City.long == city_lon).first()
             if not city:
@@ -185,7 +188,6 @@ def update_user_profile(
                 db.flush()
             user.city_id = city.id
 
-        # Upload profile picture to Cloudinary if provided
         if profile_picture and profile_picture.filename:
             url = upload_image(profile_picture.file.read(), folder="profiles")
             user.profile_picture = url
@@ -205,10 +207,12 @@ def update_user_profile(
             status_code=status.HTTP_200_OK,
             message="Profile updated successfully"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return UserOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message=error,
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update profile",
         )

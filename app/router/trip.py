@@ -1,22 +1,28 @@
-from fastapi import APIRouter, HTTPException , status
+import logging
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.params import Depends
-from app.enums import PrivacyEntityType , PrivacyType
+from app.enums import NotificationType, PrivacyEntityType , PrivacyType
 from sqlmodel import Session
 from app.utils.error_handling import exception_handler
 from Dbengin import get_db
-from app.models import User, City, Trip , PrivacySettings, Friendship , Stop
+from app.models import User, City, Trip , PrivacySettings, Friendship , Stop, Post
 from app.services.user import get_user
-from app.schema.trip import TripCreate, TripBaseOut , TripsOut , TripOut
+from app.services.notification import NotificationError
+from app.services.notification_service import create_and_send_notification
+from app.services.trip_privacy import can_view_trip
+from app.schema.trip import TripCreate, TripBaseOut , TripsOut
 from app.schema.friendships import FriendFirstStop
-from app.schema.city import CityOut , CityCreate , CityData
-from app.schema.stop import StopInput
-from app import schema
 from app.utils import oauth2
-from typing import Optional
-
+from app.utils.pagination import div_ceil
 router = APIRouter()
+logger = logging.getLogger(__name__)
+"""
+Every trip always contains at least two stops.
+The first stop (order = 0) is the departure city,
+and the last stop is the destination city. 
+Additional stops may only be inserted between these two stops.
 
-
+"""
 @router.post('/trips', response_model=TripBaseOut, status_code=status.HTTP_201_CREATED)
 def create_trip(
     entry: TripCreate,
@@ -25,24 +31,25 @@ def create_trip(
 ):
     user = db.query(User).filter(User.id == current_user.user_id).first()
 
-    home_city = None
-    if entry.include_home_city:
-        city_obj = db.query(City).filter(City.id == user.city_id).first()
-        if city_obj:
-            home_city = CityData.model_validate(city_obj)
-
     user_profile_privacy = db.query(PrivacySettings).filter(
         PrivacySettings.entity_type == PrivacyEntityType.user,
         PrivacySettings.entity_id == user.id
     ).first()
-    privacy_type = PrivacyType(entry.privacy) if entry.privacy else user_profile_privacy.privacy_type
+    privacy_type = (
+        PrivacyType(entry.privacy)
+        if entry.privacy
+        else (
+            user_profile_privacy.privacy_type
+            if user_profile_privacy
+            else PrivacyType.public
+        )
+    )
 
     try:
 
         trip = Trip(
             user_id=current_user.user_id,
             title=entry.title,
-            city_id=home_city.id if home_city else None,
         )
         db.add(trip)
         db.flush()
@@ -55,29 +62,27 @@ def create_trip(
         )
         db.add(trip_privacy)
 
-        # Normalize input: either from_city/to_city or an explicit stops list
-        if entry.from_city and entry.to_city:
-            stops_to_create = [
-                StopInput(label=entry.from_city.label, lat=entry.from_city.lat, lon=entry.from_city.lon, order=0),
-                StopInput(label=entry.to_city.label, lat=entry.to_city.lat, lon=entry.to_city.lon, order=1),
-            ]
-        else:
-            stops_to_create = entry.stops
+        route_points = [
+            (entry.from_city, 0),
+            (entry.to_city, 1),
+        ]
 
-        for stop_input in stops_to_create:
+        for city_input, order in route_points:
+            city = db.query(City).filter(
+                City.lat == city_input.lat,
+                City.long == city_input.lon,
+            ).first()
 
-            city = City(
-                lat=stop_input.lat,
-                long=stop_input.lon,
-            )
-            db.add(city)
-            db.flush()
+            if not city:
+                city = City(lat=city_input.lat, long=city_input.lon)
+                db.add(city)
+                db.flush()
 
             stop = Stop(
                 trip_id=trip.id,
                 city_id=city.id,
-                title=stop_input.label,
-                order=stop_input.order,
+                title=city_input.label,
+                order=order,
             )
             db.add(stop)
 
@@ -87,17 +92,43 @@ def create_trip(
     except Exception as e:
         db.rollback()
         exception_handler(e, db)
-        return TripBaseOut(
-            id=0,
-            title='',
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="Failed to create trip",
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create trip",
         )
+
+    friends = db.query(Friendship).filter(
+        (Friendship.user_1_id == current_user.user_id)
+        | (Friendship.user_2_id == current_user.user_id)
+    ).all()
+    friend_ids = {
+        friendship.user_2_id
+        if friendship.user_1_id == current_user.user_id
+        else friendship.user_1_id
+        for friendship in friends
+    }
+    creator_name = f"{user.firstname} {user.lastname}"
+    for friend_id in friend_ids:
+        try:
+            create_and_send_notification(
+                db=db,
+                recipient_id=friend_id,
+                actor_id=current_user.user_id,
+                trip_id=trip.id,
+                notification_type=NotificationType.TRIP_CREATED,
+                title="New Trip",
+                body=f"{creator_name} started a new trip: {trip.title}",
+            )
+        except NotificationError as e:
+            db.rollback()
+            logger.error(f"Failed to send trip notification (FCM error): {e.detail}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to send trip notification: {str(e)}", exc_info=True)
 
     return TripBaseOut(
         id=trip.id,
         title=trip.title,
-        city=home_city,
         created_at=trip.created_at,
         status_code=status.HTTP_201_CREATED,
         message="Trip created successfully",
@@ -105,29 +136,57 @@ def create_trip(
 
 
 
-
 @router.get('/trips/me', response_model=TripsOut, status_code=status.HTTP_200_OK)
-def get_my_trips(db: Session = Depends(get_db), current_user=Depends(oauth2.get_current_user)):
-    trips = db.query(Trip).filter(Trip.user_id == current_user.user_id).all()
+def get_my_trips(
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+):
+    trips_query = db.query(Trip).filter(Trip.user_id == current_user.user_id)
+    total_records = trips_query.count()
+    trips = trips_query.offset((page_number - 1) * page_size).limit(page_size).all()
     if not trips:
-        return 
-        TripBaseOut(
+        return TripsOut(
+            trips=[],
             status_code=status.HTTP_200_OK,
             message="No trips found",
-        ) 
+            page_number=page_number,
+            page_size=page_size,
+            total_pages=div_ceil(total_records, page_size),
+            total_records=total_records,
+        )
 
-    my_trips = [TripOut.model_validate(trip) for trip in trips]
+    my_trips = [TripBaseOut.model_validate(trip) for trip in trips]
     return TripsOut(
         trips=my_trips,
         status_code=status.HTTP_200_OK,
-        message="Trips retrieved successfully"
+        message="Trips retrieved successfully",
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
     )
+
 @router.get('/trips/friend/{friend_id}/first-stop', response_model=FriendFirstStop, status_code=status.HTTP_200_OK)
 def get_friend_first_stop(
     friend_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
+    is_friend = db.query(Friendship).filter(
+        (
+            (Friendship.user_1_id == current_user.user_id) & (Friendship.user_2_id == friend_id)
+        ) | (
+            (Friendship.user_2_id == current_user.user_id) & (Friendship.user_1_id == friend_id)
+        )
+    ).first()
+    if not is_friend:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not friends with this user.",
+        )
+
     first_trip = (
         db.query(Trip)
         .filter(Trip.user_id == friend_id)
@@ -136,6 +195,11 @@ def get_friend_first_stop(
     )
     if not first_trip:
         raise HTTPException(status_code=404, detail="Friend has no trips")
+    if not can_view_trip(db, first_trip, current_user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this trip",
+        )
  
     first_stop = (
         db.query(Stop)
@@ -155,6 +219,8 @@ def get_friend_first_stop(
 @router.get('/trips/friend/{user_id}', response_model=TripsOut, status_code=status.HTTP_200_OK)
 def get_user_trips(
     user_id: int,
+    page_number: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
@@ -167,25 +233,94 @@ def get_user_trips(
     ).first()
 
     if not is_friend:
-        return TripsOut(
+        raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            message="You are not friends with this user.",
-            trips=[]
+            detail="You are not friends with this user.",
         )
 
     trips = db.query(Trip).filter(
         Trip.user_id == user_id,
     ).all()
+    visible_trips = [
+        trip for trip in trips
+        if can_view_trip(db, trip, current_user.user_id)
+    ]
+    total_records = len(visible_trips)
+    visible_trips = visible_trips[
+        (page_number - 1) * page_size:page_number * page_size
+    ]
 
     if not trips:
         return TripsOut(
             status_code=status.HTTP_200_OK,
             message="No public trips found.",
-            trips=[]
+            trips=[],
+            page_number=page_number,
+            page_size=page_size,
+            total_pages=div_ceil(total_records, page_size),
+            total_records=total_records,
         )
 
     return TripsOut(
-        trips=[TripOut.model_validate(trip) for trip in trips],
+        trips=[TripBaseOut.model_validate(trip) for trip in visible_trips],
         status_code=status.HTTP_200_OK,
-        message="Trips retrieved successfully"
+        message="Trips retrieved successfully",
+        page_number=page_number,
+        page_size=page_size,
+        total_pages=div_ceil(total_records, page_size),
+        total_records=total_records,
+    )
+
+
+@router.delete('/trips/{trip_id}', response_model=TripBaseOut, status_code=status.HTTP_200_OK)
+def delete_trip(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user)
+):
+    try:
+        with db.begin():
+            trip = db.query(Trip).filter(
+                Trip.id == trip_id,
+                Trip.user_id == current_user.user_id
+            ).first()
+
+            if not trip:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+
+            trip_title = trip.title
+            trip_created_at = trip.created_at
+
+            stop_ids = [
+                stop_id
+                for (stop_id,) in db.query(Stop.id).filter(Stop.trip_id == trip_id).all()
+            ]
+
+            if stop_ids:
+                db.query(Post).filter(Post.stop_id.in_(stop_ids)).delete(synchronize_session=False)
+
+            db.query(Stop).filter(Stop.trip_id == trip_id).delete(synchronize_session=False)
+
+            db.query(PrivacySettings).filter(
+                PrivacySettings.entity_type == PrivacyEntityType.trip,
+                PrivacySettings.entity_id == trip_id
+            ).delete(synchronize_session=False)
+
+            db.query(Trip).filter(Trip.id == trip_id).delete(synchronize_session=False)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete trip",
+        )
+
+    return TripBaseOut(
+        id=trip_id,
+        title=trip_title,
+        created_at=trip_created_at,
+        status_code=status.HTTP_200_OK,
+        message="Trip deleted successfully"
     )

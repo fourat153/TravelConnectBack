@@ -18,5 +18,6 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str
     CLOUDINARY_API_SECRET: str
     model_config = SettingsConfigDict(env_file=".env")
-
+    google_application_credentials: str | None = None
+    environment: str = "development"
 settings = Settings()

@@ -4,14 +4,12 @@ from sqlalchemy import Column, DateTime, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 
 class Trip(Base):
-    __tablename__ = 'trips'
+    __tablename__ = "trips"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
     title = Column(String, nullable=False)
-    city_id = Column(Integer, ForeignKey("city.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     user = relationship("User")
-    city = relationship("City") 
-    stops = relationship("Stop", back_populates="trip", order_by="Stop.order")
+    stops = relationship("Stop", back_populates="trip", order_by="Stop.order",cascade="all, delete-orphan",)

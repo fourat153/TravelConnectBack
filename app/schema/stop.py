@@ -1,17 +1,18 @@
 from typing import Optional, List
-from app.schema.our_base_model import OurBaseModel, OurBaseOut
+from app.schema.our_base_model import OurBaseModel, OurBaseOut, PaginatedResponse
 from app.schema.city import CityData
 
 class StopCreate(OurBaseModel):
     lat: float
     long: float
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
+    order: int
 
 class StopOut(OurBaseModel):
     id: int
     trip_id: int
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
     order: int
     city: CityData
@@ -23,7 +24,7 @@ class StopBaseOut(OurBaseOut):
     city: Optional[CityData] = None
     order: Optional[int] = None
 
-class StopsOut(OurBaseOut):
+class StopsOut(PaginatedResponse):
     stops: Optional[List[StopOut]] = None
 
 class StopInput(OurBaseModel):

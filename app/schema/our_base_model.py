@@ -5,7 +5,15 @@ from pydantic import BaseModel
 class OurBaseModel(BaseModel):
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 class OurBaseOut(OurBaseModel):
     message: Optional[str] = None
     status_code: Optional[int] = None
+
+
+class PaginatedResponse(OurBaseOut):
+    page_number: int
+    page_size: int
+    total_pages: int
+    total_records: int

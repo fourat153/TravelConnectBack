@@ -10,6 +10,7 @@ class CityCreate(OurBaseModel):
     long : Optional[float] = None
 class CityData(OurBaseModel):
     id: int
+    name: Optional[str] = None
     lat : Optional[float] = None
     long : Optional[float] = None
 

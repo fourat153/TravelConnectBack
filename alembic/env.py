@@ -14,7 +14,7 @@ if config.config_file_name is not None:
 DATABASE_URL = f"postgresql://{os.getenv('database_username')}:{os.getenv('database_password')}@{os.getenv('database_hostname')}:{os.getenv('database_port')}/{os.getenv('database_name')}"
 
 from Dbengin import Base
-from app.models import user, city, confirmation_code, error_logger, trip, stop, post, image, comment, post_like, privacy, privacy_setting, Friendship, FriendshipRequest, FriendshipStatus
+from app.models import user, city, confirmation_code, error_logger, trip, stop, post, image, comment, post_like, privacy, privacy_setting, Friendship, FriendshipRequest, FriendshipStatus, device_token, notification
 
 target_metadata = Base.metadata
 

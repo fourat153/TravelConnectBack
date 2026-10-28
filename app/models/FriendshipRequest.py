@@ -16,6 +16,7 @@ class FriendshipRequest(Base):
  
     sender   = relationship("User", foreign_keys=[sender_id],   back_populates="sent_requests")
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_requests")
+    status   = relationship("FriendshipStatus")
  
     __table_args__ = (
         UniqueConstraint("sender_id", "receiver_id", name="uq_friendship_request_pair"),

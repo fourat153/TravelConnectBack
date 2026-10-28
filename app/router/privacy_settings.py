@@ -1,14 +1,48 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from fastapi.params import Depends
 from sqlalchemy.orm import Session
 from Dbengin import get_db
 from app.utils.error_handling import exception_handler
 from app.enums import PrivacyEntityType
-from app.models import PrivacySettings
+from app.models import PrivacySettings, User, Trip, Stop, Post
 from app.schema.privacy_settings import PrivacySettingsCreate, PrivacySettingsUpdate, PrivacySettingsOut
 from app.utils import oauth2
 
 router = APIRouter()
+
+def _entity_owner_id(
+    entity_type: PrivacyEntityType,
+    entity_id: int,
+    db: Session,
+) -> int | None:
+    if entity_type == PrivacyEntityType.user:
+        entity = db.query(User).filter(User.id == entity_id).first()
+        return entity.id if entity else None
+    if entity_type == PrivacyEntityType.trip:
+        entity = db.query(Trip).filter(Trip.id == entity_id).first()
+        return entity.user_id if entity else None
+    if entity_type == PrivacyEntityType.stop:
+        entity = db.query(Stop).filter(Stop.id == entity_id).first()
+        return entity.trip.user_id if entity and entity.trip else None
+    if entity_type == PrivacyEntityType.post:
+        entity = db.query(Post).filter(Post.id == entity_id).first()
+        return entity.stop.trip.user_id if entity and entity.stop and entity.stop.trip else None
+    return None
+
+def _ensure_entity_owner(
+    entity_type: PrivacyEntityType,
+    entity_id: int,
+    current_user_id: int,
+    db: Session,
+) -> None:
+    owner_id = _entity_owner_id(entity_type, entity_id, db)
+    if owner_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
+    if owner_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the entity owner can manage its privacy",
+        )
 
 @router.post('/privacy-settings', response_model=PrivacySettingsOut, status_code=status.HTTP_201_CREATED)
 def create_privacy_setting(
@@ -16,14 +50,15 @@ def create_privacy_setting(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
+    _ensure_entity_owner(entry.entity_type, entry.entity_id, current_user.user_id, db)
     existing = db.query(PrivacySettings).filter(
         PrivacySettings.entity_type == entry.entity_type,
         PrivacySettings.entity_id == entry.entity_id
     ).first()
     if existing:
-        return PrivacySettingsOut(
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            message="Privacy setting already exists for this entity"
+            detail="Privacy setting already exists for this entity",
         )
     try:
         setting = PrivacySettings(
@@ -36,10 +71,10 @@ def create_privacy_setting(
         db.refresh(setting)
     except Exception as e:
         db.rollback()
-        error = exception_handler(e, db)
-        return PrivacySettingsOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="Failed to create privacy setting"
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create privacy setting",
         )
     return PrivacySettingsOut(
         id=setting.id,
@@ -59,13 +94,14 @@ def update_privacy_setting(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
+    _ensure_entity_owner(entity_type, entity_id, current_user.user_id, db)
     entity_setting = db.query(PrivacySettings).filter(PrivacySettings.entity_id == entity_id , 
     PrivacySettings.entity_type == entity_type
     ).first()
     if not entity_setting:
-        return PrivacySettingsOut(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message="Privacy setting not found"
+            detail="Privacy setting not found",
         )
     try:
         entity_setting.privacy_type = entry.privacy_type
@@ -73,9 +109,10 @@ def update_privacy_setting(
         db.refresh(entity_setting)
     except Exception as e:
         db.rollback()
-        return PrivacySettingsOut(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="Failed to update privacy setting"
+        exception_handler(e, db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update privacy setting",
         )
     return PrivacySettingsOut(
         id=entity_setting.id,
@@ -94,13 +131,14 @@ def get_privacy_setting(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
+    _ensure_entity_owner(entity_type, entity_id, current_user.user_id, db)
     entity_setting = db.query(PrivacySettings).filter(PrivacySettings.entity_id == entity_id , 
     PrivacySettings.entity_type == entity_type
     ).first()
     if not entity_setting:
-        return PrivacySettingsOut(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message="Privacy setting not found"
+            detail="Privacy setting not found",
         )
     return PrivacySettingsOut(
         id=entity_setting.id,

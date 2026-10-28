@@ -1,0 +1,284 @@
+TravelConnectBack - Privacy and Error Handling Handoff
+=======================================================
+
+Date: 2026-10-07
+
+1. Problem observed while deleting a post
+-----------------------------------------
+
+Request:
+
+    DELETE /posts/160
+
+The debugger entered this branch in app/router/post.py:
+
+    return SinglePostOut(
+        status_code=status.HTTP_403_FORBIDDEN,
+        message="Only the trip owner can delete posts",
+    )
+
+However, the server log showed:
+
+    DELETE /posts/160 HTTP/1.1" 200 OK
+
+Reason:
+
+- Returning a schema object does not automatically change the real HTTP status.
+- The status_code field is only data in the response body.
+- The delete route is declared with status_code=200.
+- SinglePostOut currently inherits from OurBaseModel, not OurBaseOut, so
+  status_code and message are not part of its declared response schema.
+
+Decision still needed:
+
+A. Schema-return approach:
+   - Return response schemas for both success and errors.
+   - Set the actual FastAPI Response.status_code manually on every error path.
+   - Make error fields part of the response schema.
+   - Risk: easy to forget setting Response.status_code and accidentally return
+     HTTP 200 for an error.
+
+B. HTTPException approach:
+   - Return a schema for successful responses.
+   - Raise HTTPException for 400, 401, 403, 404, and other errors.
+   - Optionally add one global HTTPException handler if the frontend requires
+     a custom JSON shape such as:
+
+         {
+           "status_code": 403,
+           "message": "Only the trip owner can delete posts"
+         }
+
+   - This is the clearer and more idiomatic FastAPI approach.
+
+The recent manual Response/status-code change was reverted before ending the
+session. The current delete endpoint again returns an error-shaped schema while
+the route may still send HTTP 200. Revisit this deliberately tomorrow.
+
+2. Current privacy model
+------------------------
+
+Trips do not have a privacy column.
+
+Privacy is stored in privacy_settings:
+
+    entity_type = user | trip | stop | post
+    entity_id   = ID of the related entity
+    privacy_type = public | private | friends_only
+
+For a trip:
+
+    entity_type = "trip"
+    entity_id   = trips.id
+
+The relationship is application-polymorphic. privacy_settings.entity_id is
+not a database foreign key to trips.id, stops.id, posts.id, or user.id.
+
+Trip relationships:
+
+    User -> Trip -> Stop -> Post -> Comment
+                                -> PostLike
+
+The central visibility helper is:
+
+    app/services/trip_privacy.py
+    can_view_trip(db, trip, viewer_id, friend_ids=None)
+
+Current intended rules:
+
+    Trip owner       can always view.
+    Public           everyone can view.
+    Private          only the owner can view.
+    Friends-only     owner and friends can view.
+
+If a trip privacy row is missing, can_view_trip currently treats the trip as
+public.
+
+3. Changes already made
+-----------------------
+
+Privacy checks were added for:
+
+- GET /stops/{stop_id}/posts
+- GET /posts/{post_id}
+- GET /posts/user/{user_id}
+- GET /posts/{post_id}/comments
+- POST /posts/{post_id}/comments
+- POST /posts/{post_id}/likes
+- DELETE /posts/{post_id}/likes
+- GET /trips/friend/{friend_id}/first-stop
+- GET /trips/friend/{user_id}
+
+Owner checks were added for:
+
+- Creating a post on a stop.
+- Deleting a post.
+- Managing privacy settings for users, trips, stops, and posts.
+
+Trip creation was also made safer:
+
+- Explicit request privacy takes priority.
+- Otherwise the user's profile privacy is copied.
+- If no profile privacy exists, the trip defaults to public.
+
+4. Important unfinished privacy/access-control work
+---------------------------------------------------
+
+4.1 Trip deletion
+
+DELETE /trips/{trip_id} already filters by:
+
+    Trip.id == trip_id
+    Trip.user_id == current_user.user_id
+
+Review whether all related privacy rows, stops, posts, comments, likes,
+images, and videos are deleted reliably. Check database foreign-key cascade
+behavior and ORM cascade behavior.
+
+4.2 Stop modification endpoints
+
+Review every endpoint in app/router/stop.py:
+
+- POST /trips/{trip_id}/stops
+- GET /trips/{trip_id}/stops
+- PUT /trips/{trip_id}/stops/reorder
+- Any stop update/delete endpoints later in the file
+
+Reads should use can_view_trip.
+Writes should require trip ownership, not merely visibility.
+
+Do not allow a friend to modify a friends-only trip just because the friend
+can view it.
+
+4.3 Post creation and deletion
+
+The Post model currently has no user_id/author_id field.
+
+Current behavior:
+
+- Only the trip owner can create a post.
+- Only the trip owner can delete a post.
+
+This means post ownership is inferred from:
+
+    Post -> Stop -> Trip -> Trip.user_id
+
+There is no separate post creator field. Decide whether this is the intended
+product rule. If posts should support contributors, add a posts.user_id
+foreign key through an Alembic migration and update all post creation paths.
+
+4.4 Privacy settings ownership
+
+The privacy settings table is polymorphic and does not use real foreign keys.
+Verify that create, update, and get operations enforce ownership for every
+entity type.
+
+Also consider adding database/application validation so that an entity_id
+actually exists for the selected entity_type.
+
+4.5 Friend trip endpoints
+
+GET /trips/friend/{user_id} must not return private trips.
+Friends-only trips should be returned only to friends.
+
+GET /trips/friend/{friend_id}/first-stop must not expose the location of a
+private trip.
+
+Review whether returning an empty list, 403, or 404 is the desired behavior
+when no trips are visible.
+
+4.6 Post endpoints
+
+Verify that every endpoint reaching a post follows:
+
+    Post -> Stop -> Trip -> can_view_trip
+
+Read/comment/like operations should require view permission.
+Create/delete operations should require the appropriate owner permission.
+
+Endpoints to re-check:
+
+- GET /stops/{stop_id}/posts
+- POST /stops/{stop_id}/posts
+- DELETE /posts/{post_id}
+- GET /posts/{post_id}/comments
+- POST /posts/{post_id}/comments
+- POST /posts/{post_id}/likes
+- DELETE /posts/{post_id}/likes
+- GET /posts/feed
+- GET /posts/{post_id}
+- GET /posts/user/{user_id}
+- POST /posts/feed
+
+The POST /posts/feed endpoint can create a default "My Travels" trip and
+currently creates that trip's privacy row as public. Decide whether that is
+correct or whether it should use the user's profile privacy.
+
+4.7 Notification privacy
+
+Trip creation sends notifications to friends. Review whether notifications
+should be sent for private trips. A private trip may not need to notify
+friends, or the notification may need to avoid exposing trip details.
+
+5. Recommended authorization rules
+----------------------------------
+
+For reading trip-related data:
+
+    can_view_trip(db, trip, current_user.user_id)
+
+For modifying trip-related data:
+
+    trip.user_id == current_user.user_id
+
+Visibility and modification are different:
+
+    A friend may view a friends-only trip.
+    A friend should not automatically be able to edit its stops or posts.
+
+6. Suggested test cases for tomorrow
+------------------------------------
+
+Create users:
+
+- Owner
+- Friend of owner
+- Unrelated user
+
+Create trips with:
+
+- public
+- private
+- friends_only
+
+Verify:
+
+- Owner can view every own trip.
+- Friend can view public and friends_only trips.
+- Friend cannot view private trips.
+- Unrelated user can view public trips only.
+- Friend cannot add/reorder/delete stops on owner's trip.
+- Friend cannot create/delete posts on owner's trip.
+- Friend cannot read comments or add likes/comments to a private trip.
+- Unrelated user cannot access a private post by guessing its post ID.
+- Privacy setting updates are rejected for another user's trip.
+- Missing user profile privacy does not break trip creation.
+- Unauthorized delete returns the intended real HTTP status, not only a
+  status_code value inside a JSON body.
+
+7. Files involved
+-----------------
+
+- app/router/post.py
+- app/router/trip.py
+- app/router/stop.py
+- app/router/privacy_settings.py
+- app/services/trip_privacy.py
+- app/models/trip.py
+- app/models/stop.py
+- app/models/post.py
+- app/models/privacy_setting.py
+- app/schema/post.py
+- app/schema/trip.py
+- app/schema/privacy_settings.py
+
