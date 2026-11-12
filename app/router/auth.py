@@ -20,6 +20,8 @@ router = APIRouter()
 
 
 def _use_secure_cookies() -> bool:
+    if settings.cookie_secure is not None:
+        return settings.cookie_secure
     return settings.environment.strip().lower() in {"production", "prod"}
 
 

@@ -21,4 +21,5 @@ class Settings(BaseSettings):
     google_application_credentials: str | None = None
     environment: str = "development"
     frontend_url: str = "http://localhost:4200"
+    cookie_secure: bool | None = None
 settings = Settings()
