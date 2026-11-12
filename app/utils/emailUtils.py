@@ -1,4 +1,5 @@
 
+from typing import List
 from fastapi_mail import ConnectionConfig, MessageSchema , FastMail ,MessageType
 from ..config import settings
 from jinja2 import Environment, select_autoescape, PackageLoader
@@ -32,6 +33,7 @@ async def send_email(subject: str, recipients: List, email_template: EmailTempla
         name=email,
         code=code,
         user_id = user_id,
+        frontend_url=settings.frontend_url.rstrip("/"),
         subject=subject,
     )
 

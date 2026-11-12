@@ -20,4 +20,5 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
     google_application_credentials: str | None = None
     environment: str = "development"
+    frontend_url: str = "http://localhost:4200"
 settings = Settings()

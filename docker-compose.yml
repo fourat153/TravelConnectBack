@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${database_name:-travel-connect}
+      POSTGRES_USER: ${database_username:-postgres}
+      POSTGRES_PASSWORD: ${database_password:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      database_hostname: db
+      database_port: "5432"
+      database_name: ${database_name:-travel-connect}
+      database_username: ${database_username:-postgres}
+      database_password: ${database_password:-postgres}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-credentials.json
+      frontend_url: ${frontend_url:-http://localhost:8080}
+    volumes:
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS}
+        target: /run/secrets/firebase-credentials.json
+        read_only: true
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --root-path /api"
+
+  frontend:
+    build:
+      context: ../travel_connect_front
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:
