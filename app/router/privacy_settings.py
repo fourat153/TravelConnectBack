@@ -1,33 +1,15 @@
 from fastapi import APIRouter, HTTPException, status
 from fastapi.params import Depends
 from sqlalchemy.orm import Session
-from Dbengin import get_db
+from app.database import get_db
 from app.utils.error_handling import exception_handler
 from app.enums import PrivacyEntityType
-from app.models import PrivacySettings, User, Trip, Stop, Post
+from app.models import PrivacySettings
 from app.schema.privacy_settings import PrivacySettingsCreate, PrivacySettingsUpdate, PrivacySettingsOut
+from app.services.trip_privacy import get_privacy_entity_owner_id
 from app.utils import oauth2
 
 router = APIRouter()
-
-def _entity_owner_id(
-    entity_type: PrivacyEntityType,
-    entity_id: int,
-    db: Session,
-) -> int | None:
-    if entity_type == PrivacyEntityType.user:
-        entity = db.query(User).filter(User.id == entity_id).first()
-        return entity.id if entity else None
-    if entity_type == PrivacyEntityType.trip:
-        entity = db.query(Trip).filter(Trip.id == entity_id).first()
-        return entity.user_id if entity else None
-    if entity_type == PrivacyEntityType.stop:
-        entity = db.query(Stop).filter(Stop.id == entity_id).first()
-        return entity.trip.user_id if entity and entity.trip else None
-    if entity_type == PrivacyEntityType.post:
-        entity = db.query(Post).filter(Post.id == entity_id).first()
-        return entity.stop.trip.user_id if entity and entity.stop and entity.stop.trip else None
-    return None
 
 def _ensure_entity_owner(
     entity_type: PrivacyEntityType,
@@ -35,7 +17,7 @@ def _ensure_entity_owner(
     current_user_id: int,
     db: Session,
 ) -> None:
-    owner_id = _entity_owner_id(entity_type, entity_id, db)
+    owner_id = get_privacy_entity_owner_id(db, entity_type, entity_id)
     if owner_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
     if owner_id != current_user_id:

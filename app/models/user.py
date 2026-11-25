@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Enum
 from sqlalchemy.orm import relationship
-from Dbengin import Base
+from app.database import Base
 from app.enums import GenderEnum, AccountStatusEnum , ConfirmedEnum
 from sqlalchemy import Boolean
 from app.enums import Onboarding

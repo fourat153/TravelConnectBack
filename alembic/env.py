@@ -2,7 +2,6 @@ from logging.config import fileConfig
 from sqlalchemy import create_engine, pool
 from alembic import context
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -11,11 +10,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-DATABASE_URL = f"postgresql://{os.getenv('database_username')}:{os.getenv('database_password')}@{os.getenv('database_hostname')}:{os.getenv('database_port')}/{os.getenv('database_name')}"
-
-from Dbengin import Base
+from app.database import Base, DatabaseURL
 from app.models import user, city, confirmation_code, error_logger, trip, stop, post, image, comment, post_like, privacy, privacy_setting, Friendship, FriendshipRequest, FriendshipStatus, device_token, notification
 
+DATABASE_URL = DatabaseURL
 target_metadata = Base.metadata
 
 

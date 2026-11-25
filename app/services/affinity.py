@@ -1,5 +1,5 @@
 from datetime import datetime
-from Dbengin import SessionLocal
+from app.database import SessionLocal
 from app.models.UserCityAffinity import UserCityAffinity
 
 

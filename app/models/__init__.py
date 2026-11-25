@@ -1,4 +1,4 @@
-from  Dbengin import Base
+from app.database import Base
 from .user import User
 from .city import City
 from .privacy import Privacy

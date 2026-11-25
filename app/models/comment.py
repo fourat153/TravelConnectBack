@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 
-from Dbengin import Base
+from app.database import Base
 
 
 class Comment(Base):
