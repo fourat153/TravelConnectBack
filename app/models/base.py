@@ -1,3 +1,3 @@
-from Dbengin import Base
+from app.database import Base
 
 __all__ = ["Base"]

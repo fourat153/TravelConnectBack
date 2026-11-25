@@ -17,7 +17,7 @@ from typing import Callable, TypeVar
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from Dbengin import SessionLocal
+from app.database import SessionLocal
 from app import models
 from app.enums import (
     AccountStatusEnum,

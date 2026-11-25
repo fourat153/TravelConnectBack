@@ -1,8 +1,7 @@
 import requests
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from app.database import engine
 
-DATABASE_URL = "postgresql://postgres:1234@localhost:5433/travel-connect"
-engine      = create_engine(DATABASE_URL)
 BASE_URL    = "http://localhost:8000"
 RANGE_START = 600
 RANGE_END   = 700  

@@ -4,9 +4,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, status, File, Form, UploadFile
 from fastapi.params import Depends
 from .. import enums
-from sqlmodel import Session
+from sqlalchemy.orm import Session
 from ..schema.confirmation_code import ConfirmationCodeCreate
-from Dbengin import get_db
+from app.database import get_db
 from .. import models
 from ..schema.user import UserCreate, UserOut
 from ..utils.emailUtils import send_email

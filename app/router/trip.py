@@ -1,21 +1,18 @@
-import logging
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.params import Depends
-from app.enums import NotificationType, PrivacyEntityType , PrivacyType
-from sqlmodel import Session
-from app.utils.error_handling import exception_handler
-from Dbengin import get_db
-from app.models import User, City, Trip , PrivacySettings, Friendship , Stop, Post
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import Trip, Friendship, Stop
 from app.services.user import get_user
-from app.services.notification import NotificationError
-from app.services.notification_service import create_and_send_notification
-from app.services.trip_privacy import can_view_trip
+from app.services import trip as trip_service
+from app.services.trip_privacy import (
+    can_view_trip,
+)
 from app.schema.trip import TripCreate, TripBaseOut , TripsOut
 from app.schema.friendships import FriendFirstStop
 from app.utils import oauth2
 from app.utils.pagination import div_ceil
 router = APIRouter()
-logger = logging.getLogger(__name__)
 """
 Every trip always contains at least two stops.
 The first stop (order = 0) is the departure city,
@@ -29,102 +26,7 @@ def create_trip(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
-    user = db.query(User).filter(User.id == current_user.user_id).first()
-
-    user_profile_privacy = db.query(PrivacySettings).filter(
-        PrivacySettings.entity_type == PrivacyEntityType.user,
-        PrivacySettings.entity_id == user.id
-    ).first()
-    privacy_type = (
-        PrivacyType(entry.privacy)
-        if entry.privacy
-        else (
-            user_profile_privacy.privacy_type
-            if user_profile_privacy
-            else PrivacyType.public
-        )
-    )
-
-    try:
-
-        trip = Trip(
-            user_id=current_user.user_id,
-            title=entry.title,
-        )
-        db.add(trip)
-        db.flush()
-
-
-        trip_privacy = PrivacySettings(
-            entity_type=PrivacyEntityType.trip,
-            entity_id=trip.id,
-            privacy_type=privacy_type,
-        )
-        db.add(trip_privacy)
-
-        route_points = [
-            (entry.from_city, 0),
-            (entry.to_city, 1),
-        ]
-
-        for city_input, order in route_points:
-            city = db.query(City).filter(
-                City.lat == city_input.lat,
-                City.long == city_input.lon,
-            ).first()
-
-            if not city:
-                city = City(lat=city_input.lat, long=city_input.lon)
-                db.add(city)
-                db.flush()
-
-            stop = Stop(
-                trip_id=trip.id,
-                city_id=city.id,
-                title=city_input.label,
-                order=order,
-            )
-            db.add(stop)
-
-        db.commit()
-        db.refresh(trip)
-
-    except Exception as e:
-        db.rollback()
-        exception_handler(e, db)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create trip",
-        )
-
-    friends = db.query(Friendship).filter(
-        (Friendship.user_1_id == current_user.user_id)
-        | (Friendship.user_2_id == current_user.user_id)
-    ).all()
-    friend_ids = {
-        friendship.user_2_id
-        if friendship.user_1_id == current_user.user_id
-        else friendship.user_1_id
-        for friendship in friends
-    }
-    creator_name = f"{user.firstname} {user.lastname}"
-    for friend_id in friend_ids:
-        try:
-            create_and_send_notification(
-                db=db,
-                recipient_id=friend_id,
-                actor_id=current_user.user_id,
-                trip_id=trip.id,
-                notification_type=NotificationType.TRIP_CREATED,
-                title="New Trip",
-                body=f"{creator_name} started a new trip: {trip.title}",
-            )
-        except NotificationError as e:
-            db.rollback()
-            logger.error(f"Failed to send trip notification (FCM error): {e.detail}")
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Failed to send trip notification: {str(e)}", exc_info=True)
+    trip = trip_service.create_trip(db, entry, current_user.user_id)
 
     return TripBaseOut(
         id=trip.id,
@@ -241,10 +143,11 @@ def get_user_trips(
     trips = db.query(Trip).filter(
         Trip.user_id == user_id,
     ).all()
-    visible_trips = [
-        trip for trip in trips
-        if can_view_trip(db, trip, current_user.user_id)
-    ]
+    visible_trips = trip_service.filter_visible_trips(
+        db,
+        trips,
+        current_user.user_id,
+    )
     total_records = len(visible_trips)
     visible_trips = visible_trips[
         (page_number - 1) * page_size:page_number * page_size
@@ -278,44 +181,11 @@ def delete_trip(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user)
 ):
-    try:
-        with db.begin():
-            trip = db.query(Trip).filter(
-                Trip.id == trip_id,
-                Trip.user_id == current_user.user_id
-            ).first()
-
-            if not trip:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
-            trip_title = trip.title
-            trip_created_at = trip.created_at
-
-            stop_ids = [
-                stop_id
-                for (stop_id,) in db.query(Stop.id).filter(Stop.trip_id == trip_id).all()
-            ]
-
-            if stop_ids:
-                db.query(Post).filter(Post.stop_id.in_(stop_ids)).delete(synchronize_session=False)
-
-            db.query(Stop).filter(Stop.trip_id == trip_id).delete(synchronize_session=False)
-
-            db.query(PrivacySettings).filter(
-                PrivacySettings.entity_type == PrivacyEntityType.trip,
-                PrivacySettings.entity_id == trip_id
-            ).delete(synchronize_session=False)
-
-            db.query(Trip).filter(Trip.id == trip_id).delete(synchronize_session=False)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        exception_handler(e, db)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete trip",
-        )
+    trip_title, trip_created_at = trip_service.delete_trip(
+        db,
+        trip_id,
+        current_user.user_id,
+    )
 
     return TripBaseOut(
         id=trip_id,

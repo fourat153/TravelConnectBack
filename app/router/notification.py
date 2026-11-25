@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from Dbengin import get_db
+from app.database import get_db
 from app.enums import NotificationType
 from app.models.device_token import DeviceToken
 from app.models.notification import Notification

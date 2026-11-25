@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
-from Dbengin import Base
+from app.database import Base
 
 class UserCityAffinity(Base):
     __tablename__ = "user_city_affinity"

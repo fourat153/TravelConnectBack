@@ -25,9 +25,9 @@ TravelConnectBack/
 │   ├── schema/         # Pydantic schemas
 │   ├── router/         # FastAPI routers
 │   ├── utils/          # Helpers (error handling, email, etc.)
-│   └── database.py     # DB session and engine
+│   └── database.py     # SQLAlchemy engine, session factory, and Base
 ├── alembic/            # Migrations
-├── Dbengin.py          # SQLAlchemy base
+├── Dbengin.py          # Backward-compatible database imports
 ├── main.py             # App entry point
 ├── .env                # Environment variables (not committed)
 └── alembic.ini
